@@ -7,6 +7,7 @@ Syntax highlighting, indentation, file icons, and interactive execution for `.si
 1. Download `sianlang-vscode-0.3.1.vsix`. It includes the Windows x64 interpreter; no compiler, Python, or Node.js installation is required.
 2. Install it using VS Code **Extensions: Install from VSIX...**.
 3. Open a saved local `.sian` file in a trusted workspace. Standalone files also work.
+4. Press the ▶ run button in the editor title bar. F6 and **SianLang: Run File** do the same thing.
 4. Press F6 or use **SianLang: Run File**. The file is saved before execution.
 
 Leave `sianlang.executable` empty to use the bundled interpreter. A custom path is absolute or relative to the workspace (the file's folder for standalone files). macOS/Linux/remote environments need their own native interpreter. This release is tested on Windows x64.

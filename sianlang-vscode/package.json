@@ -72,17 +72,17 @@
     ],
     "menus": {
       "editor/title": [
-        {
-          "command": "sianlang.runFile",
-          "when": "editorLangId == sianlang",
-          "group": "navigation"
+          {
+            "command": "sianlang.runFile",
+            "when": "editorLangId == sianlang",
+            "group": "navigation@1"
         }
       ],
       "editor/context": [
-        {
-          "command": "sianlang.runFile",
-          "when": "editorLangId == sianlang",
-          "group": "sianlang"
+          {
+            "command": "sianlang.runFile",
+            "when": "editorLangId == sianlang",
+            "group": "sianlang"
         }
       ]
     },

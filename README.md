@@ -9,6 +9,8 @@ Python처럼 쉽게 배우고, 앞으로 2D 게임을 만들 수 있는 언어�
 
 [다운로드 웹사이트](https://rodotsian10.github.io/Sianlang/) · [릴리스 다운로드](https://github.com/rodotsian10/Sianlang/releases) · [문법 안내서](설명서/시안랭-문법규칙서.md)
 
+[명령어 사전](https://rodotsian10.github.io/Sianlang/commands.html)에서 각 명령어를 문서별로 확인할 수 있습니다.
+
 ## 바로 사용하기
 
 **Windows 10/11 x64**에서 사용할 수 있습니다. 사용자에게 Python, GCC, Node.js 설치가 필요하지 않습니다.

@@ -1,0 +1,6 @@
+log "before"
+try
+    log 1 / 0
+catch error
+    log "caught"
+log "after"

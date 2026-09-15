@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="ko">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SianLang — 작게 시작하는 나만의 프로그램</title>
+<style>
+:root{color-scheme:dark;font-family:system-ui,sans-serif;background:#101719;color:#eff8f6}body{max-width:960px;margin:auto;padding:32px 24px 60px}header{display:flex;align-items:center;gap:12px;border-bottom:1px solid #314346;padding-bottom:20px}header img{width:40px;height:40px}main{padding-top:58px}h1{font-size:clamp(34px,6vw,58px);line-height:1.16;letter-spacing:-2px;max-width:700px}p{line-height:1.8;color:#bed0d0}.tag{color:#84d3db;font-size:14px}nav{display:flex;flex-wrap:wrap;gap:12px;margin:28px 0}a{color:#84d3db}nav a{padding:14px 22px;border-radius:8px;text-decoration:none;border:1px solid #84d3db}nav a:first-child{background:#84d3db;color:#101719;font-weight:700}.grid{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:48px}section{border-top:1px solid #314346;padding-top:12px}li{margin:14px 0;line-height:1.7}pre{background:#1a272b;padding:22px;border-radius:8px;overflow:auto;line-height:1.8}footer{margin-top:50px;color:#bed0d0;font-size:13px}@media(max-width:650px){.grid{grid-template-columns:1fr}}
+</style>
+<header><img src="Sianlangicon.svg" alt=""><strong>SianLang</strong></header>
+<main>
+<span class="tag">WINDOWS x64 · v0.3.1 · 첫 배포판</span>
+<h1>간단한 문법으로<br>만드는 첫 프로그램.</h1>
+<p>쉽게 배우고, 바로 실행하세요.<br>SianLang은 앞으로 2D 게임 제작을 지원할 목표로 개발 중인 언어입니다.</p>
+<nav aria-label="다운로드">
+<a href="https://github.com/rodotsian10/Sianlang/releases/download/v0.3.1/SianLang-0.3.1-windows-x64.zip" download>Windows 패키지 다운로드</a>
+<a href="https://github.com/rodotsian10/Sianlang/releases/download/v0.3.1/sianlang-vscode-0.3.1.vsix" download>VS Code 확장 다운로드</a>
+</nav>
+<p>ZIP: 실행기 + 확장 + 예제 + 문법 안내서<br>VSIX: 실행기 포함 · 별도 Python/C 컴파일러 설치 불필요</p>
+<pre><code>str name = "SianLang"
+log.f("Hello, {name}!")</code></pre>
+<div class="grid">
+<section><h2>VS Code에서 시작하기</h2><ol><li>VSIX 파일을 다운로드합니다.</li><li>VS Code 확장 화면의 … → Install from VSIX...로 설치합니다.</li><li>.sian 파일을 저장하고 F6을 누릅니다.</li></ol></section>
+<section><h2>나만의 .sian 아이콘</h2><p>명령 팔레트에서 Preferences: File Icon Theme → SianLang File Icons를 선택하세요.</p><p>파일 아이콘 테마는 한 번에 하나만 선택할 수 있습니다.</p></section>
+</div>
+<section><h2>이번 버전의 범위</h2><p>함수·클로저, 문자열 포매팅, 반복문, 예외 처리를 지원합니다. 게임 창, 실시간 키 입력, 파일 명령어, 디버거는 앞으로 구현할 기능입니다. Windows x64에서 검증했으며 macOS/Linux용 실행기는 포함하지 않습니다.</p></section>
+</main>
+<footer>배포 파일 확인: <a href="https://github.com/rodotsian10/Sianlang/releases/download/v0.3.1/SHA256SUMS.txt">SHA-256 체크섬</a> · 개발 중인 언어이며 실행 파일은 아직 서명되지 않았습니다.</footer>
+</html>

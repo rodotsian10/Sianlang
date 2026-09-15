@@ -1,0 +1,18 @@
+|| 시안랭 테스트
+log("시안랭 테스트")
+log("게임을 만들어 봤음")
+loop (true)
+	log("랜덤import가 없기에 50이 답입니다")
+	int a = input("숫자를 입력하세요: ")
+	if a == 50
+		log("정답입니다")
+		return
+	else if a > 50
+		log("50보다 큽니다")
+		return
+	else if a < 50
+		log("50보다 작습니다")
+		return
+	else
+		log("잘못된 입력입니다")
+		return

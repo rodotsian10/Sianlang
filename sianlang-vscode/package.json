@@ -1,0 +1,130 @@
+{
+  "name": "sianlang-vscode",
+  "displayName": "SianLang Language Support",
+  "description": "SianLang syntax, snippets, file icons and F6 execution. Includes the Windows x64 interpreter.",
+  "version": "0.3.1",
+  "publisher": "sianlang",
+  "icon": "./icon.png",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/rodotsian10/Sianlang.git"
+  },
+  "homepage": "https://rodotsian10.github.io/Sianlang/",
+  "bugs": {
+    "url": "https://github.com/rodotsian10/Sianlang/issues"
+  },
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "keywords": [
+    "sianlang",
+    "sian",
+    "language"
+  ],
+  "main": "./extension.js",
+  "activationEvents": [
+    "onLanguage:sianlang",
+    "onCommand:sianlang.runFile"
+  ],
+  "contributes": {
+    "iconThemes": [
+      {
+        "id": "sianlang-icons",
+        "label": "SianLang File Icons",
+        "path": "./icons/sianlang-icon-theme.json"
+      }
+    ],
+    "languages": [
+      {
+        "id": "sianlang",
+        "icon": {
+          "light": "./icons/sianlang-file.svg",
+          "dark": "./icons/sianlang-file.svg"
+        },
+        "aliases": [
+          "SianLang",
+          "sianlang"
+        ],
+        "extensions": [
+          ".sian"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "sianlang",
+        "scopeName": "source.sianlang",
+        "path": "./syntaxes/sianlang.tmLanguage.json"
+      }
+    ],
+    "commands": [
+      {
+        "command": "sianlang.runFile",
+        "title": "SianLang: Run File",
+        "category": "SianLang",
+        "icon": "$(play)"
+      }
+    ],
+    "menus": {
+      "editor/title": [
+        {
+          "command": "sianlang.runFile",
+          "when": "editorLangId == sianlang",
+          "group": "navigation"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "sianlang.runFile",
+          "when": "editorLangId == sianlang",
+          "group": "sianlang"
+        }
+      ]
+    },
+    "keybindings": [
+      {
+        "command": "sianlang.runFile",
+        "key": "f6",
+        "when": "editorLangId == sianlang"
+      }
+    ],
+    "configuration": {
+      "title": "SianLang",
+      "properties": {
+        "sianlang.executable": {
+          "type": "string",
+          "default": "",
+          "description": "Leave empty to use the bundled Windows x64 interpreter. Otherwise specify an absolute path or a path relative to the workspace (or standalone file folder).",
+          "scope": "resource"
+        }
+      }
+    },
+    "snippets": [
+      {
+        "language": "sianlang",
+        "path": "./snippets/sianlang.json"
+      }
+    ]
+  },
+  "extensionKind": [
+    "workspace"
+  ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": "limited",
+      "description": "Syntax highlighting and icons work; running programs requires workspace trust.",
+      "restrictedConfigurations": [
+        "sianlang.executable"
+      ]
+    },
+    "virtualWorkspaces": {
+      "supported": false,
+      "description": "Running programs requires local files."
+    }
+  }
+}

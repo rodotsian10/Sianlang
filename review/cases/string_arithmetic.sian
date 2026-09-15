@@ -1,0 +1,3 @@
+log "score=" + 10
+log "abc" * 3
+log -"abc"

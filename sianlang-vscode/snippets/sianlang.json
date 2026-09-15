@@ -1,0 +1,8 @@
+{
+  "Log": {"prefix": "log", "body": ["log(${1:\"Hello, SianLang!\"})"], "description": "Console output"},
+  "Formatted log": {"prefix": "logf", "body": ["log.f(\"${1:Value}: {${2:value}}\")"], "description": "Formatted console output"},
+  "Function": {"prefix": "def", "body": ["def ${1:name}(${2:args})", "    ${0:log(\"Hello\")}"], "description": "Define a function"},
+  "If": {"prefix": "if", "body": ["if ${1:condition}", "    ${0:log(\"yes\")}"], "description": "Conditional block"},
+  "While": {"prefix": "while", "body": ["while ${1:condition}", "    ${0:break}"], "description": "While loop"},
+  "Try catch": {"prefix": "try", "body": ["try", "    ${1:log(1 / 0)}", "catch error", "    log(error)"], "description": "Handle a runtime error"}
+}

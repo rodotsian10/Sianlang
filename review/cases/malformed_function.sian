@@ -1,0 +1,3 @@
+def test(x
+    return x
+log test(4)

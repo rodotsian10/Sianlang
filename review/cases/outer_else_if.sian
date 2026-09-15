@@ -1,0 +1,6 @@
+if true
+    if false
+        log "inner"
+else if missing
+    log "outer"
+log "done"

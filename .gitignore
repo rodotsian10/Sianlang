@@ -1,0 +1,33 @@
+# Build output and release artifacts
+/build/
+/dist/
+*.exe
+*.dll
+*.o
+*.obj
+*.pdb
+*.ilk
+*.exp
+*.lib
+*.vsix
+/sianlang-vscode/bin/
+
+# Local tools, credentials, caches, and logs
+.agents/
+.codex/
+.env
+.env.*
+!.env.example
+node_modules/
+__pycache__/
+*.py[cod]
+*.log
+*.out
+*.err
+.DS_Store
+Thumbs.db
+*.tmp
+
+# Historical observation output (regression inputs remain tracked)
+/review/*results.json
+/review/run-summary.jsonl

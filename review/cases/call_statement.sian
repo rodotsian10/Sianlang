@@ -1,0 +1,3 @@
+def greet(x)
+    log x
+greet(7)

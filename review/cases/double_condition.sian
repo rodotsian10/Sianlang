@@ -1,0 +1,7 @@
+int n = 0
+def cond(x)
+    n = n + 1
+    return n < 2
+while cond(0)
+    log "body"
+log n

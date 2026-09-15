@@ -1,0 +1,3 @@
+str s = input()
+int n = s
+log n

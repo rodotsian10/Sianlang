@@ -1,0 +1,6 @@
+int x = 100
+def test(y)
+    int x = 7
+    return x
+log test(0)
+log x

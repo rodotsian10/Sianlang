@@ -1,0 +1,5 @@
+def read(dummy)
+    return secret
+def caller(secret)
+    return read(0)
+log caller(42)

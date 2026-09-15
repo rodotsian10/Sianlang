@@ -1,0 +1,4 @@
+if false
+    def hidden(x)
+        return x
+log hidden(7)

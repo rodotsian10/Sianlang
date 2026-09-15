@@ -1,0 +1,10 @@
+{
+  "iconDefinitions": {
+    "_sianlang": {
+      "iconPath": "./sianlang-file.svg"
+    }
+  },
+  "fileExtensions": {
+    "sian": "_sianlang"
+  }
+}

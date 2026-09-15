@@ -1,0 +1,3 @@
+if false
+    totally invalid syntax
+log "ok"

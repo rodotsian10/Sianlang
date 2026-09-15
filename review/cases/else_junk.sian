@@ -1,0 +1,4 @@
+if false
+    log 1
+else garbage
+    log 2

@@ -1,0 +1,3 @@
+def greet()
+    return 7
+log greet()

@@ -1,0 +1,4 @@
+def fail(x)
+    iferror("stop")
+log fail(0)
+log "after"

@@ -1,0 +1,5 @@
+int x = 100
+def identity(x)
+    return x
+log identity(7)
+log x

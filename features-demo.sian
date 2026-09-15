@@ -1,0 +1,27 @@
+def make_counter(start=0)
+    int count = start
+    def next(amount=1)
+        count = count + amount
+        return count
+    return next
+
+def invoke(callback, amount=1)
+    return callback(amount=amount)
+
+def show(a, b=2, #extra)
+    log(a, b, #extra, sep=" | ")
+
+var counter = make_counter(start=10)
+log.f("counter: {invoke(counter, amount=3)}")
+show(1, 3, "Sian", None)
+log("ready", end="...", flush=true)
+repeat 2
+    log.f(" {counter()}", end="")
+else
+    log(" done")
+
+try
+    log int("not a number")
+catch error
+    log.f("recovered: {error}")
+log "finished"

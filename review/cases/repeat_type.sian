@@ -1,0 +1,4 @@
+repeat "3"
+    log "a"
+repeat 2.9
+    log "b"

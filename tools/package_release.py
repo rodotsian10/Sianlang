@@ -43,6 +43,7 @@ checksums = ''.join(f'{hashlib.sha256((out / name).read_bytes()).hexdigest()}  {
 page = (ROOT / '배포/index.html').read_text(encoding='utf-8').replace('{{version}}', version)
 (out / 'index.html').write_text(page, encoding='utf-8')
 shutil.copyfile(ROOT / 'Sianlangicon.svg', out / 'Sianlangicon.svg')
+shutil.copyfile(ROOT / 'docs/commands.html', out / 'commands.html')
 site = ROOT / 'docs'
 site.mkdir(exist_ok=True)
 release_url = f'https://github.com/rodotsian10/Sianlang/releases/download/v{version}/'

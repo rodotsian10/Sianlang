@@ -6,19 +6,12 @@
 #include <inttypes.h>
 #include <limits.h>
 #include <math.h>
-/* Parser jumps release their arenas explicitly. MinGW's SEH unwinder may reject
-   a nested parser frame after a caught formatting error; plain C setjmp avoids
-   invoking OS exception unwinding for this internal parser control flow. */
-#ifdef __MINGW32__
-#define __USE_MINGW_SETJMP_NON_SEH
-#endif
 #include <setjmp.h>
 #include <stdarg.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <time.h>
 #include <wchar.h>
 #ifdef _WIN32
 #include <windows.h>
@@ -34,30 +27,16 @@
 typedef struct { int line, column; } Location;
 static const char *source_name = "<source>";
 static int has_error;
-static Location error_location;
-static char error_message[4096];
-static char error_trace[8192];
 
 static void error_at(Location at, const char *format, ...) {
     if (has_error) return;
     has_error = 1;
-    error_location = at;
-    error_trace[0] = '\0';
+    fprintf(stderr, "[Error] line %d: %s:%d: ", at.line, source_name, at.column);
     va_list args;
     va_start(args, format);
-    vsnprintf(error_message, sizeof(error_message), format, args);
+    vfprintf(stderr, format, args);
     va_end(args);
-}
-
-static void print_error(void) {
-    if (has_error) fprintf(stderr, "[Error] line %d: %s:%d: %s\n%s",
-        error_location.line, source_name, error_location.column, error_message, error_trace);
-}
-
-static void trace_error(const char *name, Location at) {
-    size_t length = strlen(error_trace);
-    snprintf(error_trace + length, sizeof(error_trace) - length,
-        "  called from %s at line %d, column %d\n", name, at.line, at.column);
+    fputc('\n', stderr);
 }
 
 static void *resize(void *ptr, size_t size) {

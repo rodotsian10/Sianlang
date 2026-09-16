@@ -6,7 +6,7 @@
 
 int main(int argc, char **argv) {
     if (argc == 2 && strcmp(argv[1], "--version") == 0) {
-        puts("SianLang 0.4.1");
+        puts("SianLang 0.2.0");
         return 0;
     }
     if (argc != 2) {
@@ -17,7 +17,6 @@ int main(int argc, char **argv) {
     size_t length = strlen(source_name);
     if (length < 5 || strcmp(source_name + length - 5, ".sian") != 0) {
         error_at((Location){0, 0}, "file must end with .sian");
-        print_error();
         return 1;
     }
 #ifdef _WIN32
@@ -52,7 +51,6 @@ int main(int argc, char **argv) {
     Statement *program = NULL;
     if (!has_error) program = parse_program(&tokens, &arena);
     if (!has_error) run_program(program);
-    print_error();
     free(tokens.items);
     arena_free(&arena);
     free(source_text);

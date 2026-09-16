@@ -10,6 +10,8 @@ try {
         if ($LASTEXITCODE -ne 0) { throw 'Interpreter tests failed' }
         & python tests/test_v03.py --exe build/Sianlang.exe
         if ($LASTEXITCODE -ne 0) { throw 'Language feature tests failed' }
+        & python tests/test_v04.py --exe build/Sianlang.exe
+        if ($LASTEXITCODE -ne 0) { throw 'Collection feature tests failed' }
         & node tests/test_extension.js
         if ($LASTEXITCODE -ne 0) { throw 'Extension tests failed' }
     }
@@ -23,7 +25,7 @@ try {
         & python tests/test_release.py
         if ($LASTEXITCODE -ne 0) { throw 'Release verification failed' }
     }
-    Write-Output 'Built SianLang 0.3.1 (Sianlang.exe and compatibility copy SianlangA.exe)'
+    Write-Output 'Built SianLang 0.4.1 (Sianlang.exe and compatibility copy SianlangA.exe)'
 } finally {
     Pop-Location
 }

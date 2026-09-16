@@ -35,7 +35,7 @@
     },
     {
       "name": "keyword.control.sianlang",
-      "match": "\\b(if|else|try|catch|repeat|while|loop|return|break|continue|and|or)\\b"
+      "match": "\\b(if|else|try|catch|repeat|while|loop|for|in|return|break|continue|and|or)\\b"
     },
     {
       "name": "storage.type.sianlang",
@@ -47,7 +47,7 @@
     },
     {
       "name": "support.function.sianlang",
-      "match": "\\b(log|input|len)\\b"
+      "match": "\\b(log|input|len|range|time|now|abs|min|max|round|random|open)\\b"
     },
     {
       "name": "constant.language.sianlang",

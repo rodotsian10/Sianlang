@@ -1,0 +1,10 @@
+|| SianLang 0.4.1 - Hello World & 기본 소개 예제
+
+str name = "SianLang"
+log.f("Hello, {name}!")
+
+def greet(who="친구")
+    log.f("반가워요, {who}님!")
+
+greet()
+greet(who="개발자")

@@ -1,9 +1,9 @@
 #ifndef SIAN_PARSER_H
 #define SIAN_PARSER_H
 
-typedef enum { V_VOID, V_INT, V_FLOAT, V_STR, V_BOOL, V_FUNCTION, V_TUPLE, V_ANY } ValueType;
+typedef enum { V_VOID, V_INT, V_FLOAT, V_STR, V_BOOL, V_FUNCTION, V_TUPLE, V_LIST, V_DICT, V_ANY, V_FILE } ValueType;
 typedef enum { E_INT, E_FLOAT, E_STRING, E_BOOL, E_NAME, E_CALL, E_UNARY, E_BINARY,
-    E_NONE, E_INDEX, E_MEMBER, E_FORMAT } ExprKind;
+    E_NONE, E_INDEX, E_MEMBER, E_FORMAT, E_TUPLE, E_LIST, E_DICT } ExprKind;
 typedef enum { OP_ADD, OP_SUB, OP_MUL, OP_DIV, OP_MOD, OP_NOT,
     OP_EQ, OP_NE, OP_LT, OP_LE, OP_GT, OP_GE, OP_AND, OP_OR } Operator;
 typedef struct Expr Expr;
@@ -20,8 +20,8 @@ struct Expr {
     ExprList *args;
     size_t argc;
 };
-typedef enum { S_DECLARE, S_ASSIGN, S_RETURN, S_EXPR, S_TRY,
-    S_IF, S_WHILE, S_REPEAT, S_FUNCTION, S_BREAK, S_CONTINUE } StatementKind;
+typedef enum { S_DECLARE, S_ASSIGN, S_INDEX_ASSIGN, S_RETURN, S_EXPR, S_TRY,
+    S_IF, S_WHILE, S_REPEAT, S_FOR, S_FUNCTION, S_BREAK, S_CONTINUE } StatementKind;
 typedef struct NameList { char *name; Expr *default_value; int rest; struct NameList *next; } NameList;
 typedef struct Statement Statement;
 struct Statement {
@@ -29,7 +29,7 @@ struct Statement {
     Location at;
     char *name;
     ValueType type;
-    Expr *expr;
+    Expr *expr, *expr2;
     Statement *body, *otherwise, *next;
     NameList *params;
     size_t parameter_count;
@@ -67,8 +67,8 @@ static ValueType type_named(const char *name) {
     return V_VOID;
 }
 static int reserved(const char *name) {
-    static const char *names[] = {"if", "else", "while", "loop", "repeat", "def", "func", "f", "function",
-        "return", "log", "input", "true", "false", "None", "and", "or", "break", "continue", "try", "catch"};
+    static const char *names[] = {"if", "else", "while", "loop", "repeat", "for", "in", "def", "func", "f", "function",
+        "return", "log", "input", "range", "time", "true", "false", "None", "and", "or", "break", "continue", "try", "catch"};
     if (type_named(name)) return 1;
     for (size_t i = 0; i < sizeof(names) / sizeof(*names); i++)
         if (!strcmp(name, names[i])) return 1;
@@ -91,7 +91,10 @@ static void expression_height(Parser *p, Expr *expr, unsigned int child_height) 
 static Expr *parse_expression(Parser *p, int min_precedence);
 static Expr *parse_template(Parser *p, Expr *literal);
 static int builtin_named(const char *name) {
-    return !strcmp(name, "input") || !strcmp(name, "log") || !strcmp(name, "len") ||
+    return !strcmp(name, "input") || !strcmp(name, "log") || !strcmp(name, "len") || !strcmp(name, "range") || !strcmp(name, "time") || !strcmp(name, "time.now") ||
+        !strcmp(name, "abs") || !strcmp(name, "min") || !strcmp(name, "max") || !strcmp(name, "round") ||
+        !strcmp(name, "random") || !strcmp(name, "random.int") || !strcmp(name, "random.float") || !strcmp(name, "random.choice") ||
+        !strcmp(name, "open") ||
         (type_named(name) && strcmp(name, "var"));
 }
 
@@ -135,8 +138,13 @@ static Expr *parse_atom(Parser *p) {
         return expr;
     }
     if (accept_token(p, T_LPAREN)) {
-        Expr *expr = parse_expression(p, 0);
-        expect(p, T_RPAREN, "need a closing parenthesis");
+        Expr *expr = new_expr(p, E_TUPLE, token->at); ExprList **tail = &expr->args;
+        if (!accept_token(p, T_RPAREN)) {
+            do { ExprList *item = arena_alloc(p->arena, sizeof(*item)); item->value = parse_expression(p, 0); *tail = item; tail = &item->next; expr->argc++; }
+            while (accept_token(p, T_COMMA) && peek(p)->kind != T_RPAREN);
+            expect(p, T_RPAREN, "need a closing parenthesis");
+        }
+        if (expr->argc == 1) { Expr *single = expr->args->value; return single; }
         return expr;
     }
     if (accept_token(p, T_STRING)) {
@@ -151,6 +159,29 @@ static Expr *parse_atom(Parser *p) {
         else expr->integer = strtoll(token->text, &end, 10);
         if (errno == ERANGE || *end || (decimal && !isfinite(expr->decimal)))
             syntax_error(p, token->at, "number is outside the supported range");
+        return expr;
+    }
+    if (accept_token(p, T_LBRACKET)) {
+        Expr *expr = new_expr(p, E_LIST, token->at); ExprList **tail = &expr->args;
+        if (!accept_token(p, T_RBRACKET)) {
+            do { ExprList *item = arena_alloc(p->arena, sizeof(*item)); item->value = parse_expression(p, 0); *tail = item; tail = &item->next; expr->argc++; }
+            while (accept_token(p, T_COMMA) && peek(p)->kind != T_RBRACKET);
+            expect(p, T_RBRACKET, "need a closing bracket");
+        }
+        return expr;
+    }
+    if (accept_token(p, T_LBRACE)) {
+        Expr *expr = new_expr(p, E_DICT, token->at); ExprList **tail = &expr->args;
+        if (!accept_token(p, T_RBRACE)) {
+            do {
+                ExprList *key = arena_alloc(p->arena, sizeof(*key));
+                key->value = parse_expression(p, 0); *tail = key; tail = &key->next;
+                expect(p, T_COLON, "dictionary entry needs ':'");
+                ExprList *value = arena_alloc(p->arena, sizeof(*value));
+                value->value = parse_expression(p, 0); *tail = value; tail = &value->next; expr->argc++;
+            } while (accept_token(p, T_COMMA) && peek(p)->kind != T_RBRACE);
+            expect(p, T_RBRACE, "need a closing brace");
+        }
         return expr;
     }
     if (accept_token(p, T_NAME)) {
@@ -185,6 +216,14 @@ static Expr *parse_prefix(Parser *p) {
             Token *member = expect(p, T_NAME, "expected a member name after '.'");
             if (expr->kind == E_NAME && !strcmp(expr->text, "log") && !strcmp(member->text, "f")) {
                 expr->text = arena_text(p->arena, "log.f", 5);
+            } else if (expr->kind == E_NAME && !strcmp(expr->text, "time") && !strcmp(member->text, "now")) {
+                expr->text = arena_text(p->arena, "time.now", 8);
+            } else if (expr->kind == E_NAME && !strcmp(expr->text, "random") && !strcmp(member->text, "int")) {
+                expr->text = arena_text(p->arena, "random.int", 10);
+            } else if (expr->kind == E_NAME && !strcmp(expr->text, "random") && !strcmp(member->text, "float")) {
+                expr->text = arena_text(p->arena, "random.float", 12);
+            } else if (expr->kind == E_NAME && !strcmp(expr->text, "random") && !strcmp(member->text, "choice")) {
+                expr->text = arena_text(p->arena, "random.choice", 13);
             } else {
                 Expr *access = new_expr(p, E_MEMBER, expr->at); access->left = expr; access->text = member->text;
                 expression_height(p, access, expr->height); expr = access;
@@ -314,6 +353,16 @@ static Statement *parse_statement(Parser *p) {
         }
         return head;
     }
+    if (word(token, "for")) {
+        p->pos++;
+        Statement *s = new_statement(p, S_FOR, token->at);
+        s->name = parse_name(p);
+        if (!word(peek(p), "in")) syntax_error(p, peek(p)->at, "for requires 'in'");
+        p->pos++; s->expr = parse_expression(p, 0);
+        p->loop_depth++; s->body = parse_suite(p); p->loop_depth--;
+        if (word(peek(p), "else")) { p->pos++; s->otherwise = parse_suite(p); }
+        return s;
+    }
     if (word(token, "while") || word(token, "loop") || word(token, "repeat")) {
         p->pos++;
         Statement *s = new_statement(p, word(token, "repeat") ? S_REPEAT : S_WHILE, token->at);
@@ -359,6 +408,26 @@ static Statement *parse_statement(Parser *p) {
         s->name = parse_name(p);
         expect(p, T_EQUAL, "expected '=' after variable name");
         s->expr = parse_expression(p, 0);
+    } else if (token->kind == T_NAME && p->tokens->items[p->pos + 1].kind == T_LBRACKET) {
+        /* Look ahead for name[...] = expr (index assignment) */
+        size_t scan = p->pos + 2; int depth = 1;
+        while (scan < p->tokens->count && depth > 0) {
+            if (p->tokens->items[scan].kind == T_LBRACKET) depth++;
+            if (p->tokens->items[scan].kind == T_RBRACKET) depth--;
+            scan++;
+        }
+        if (depth == 0 && scan < p->tokens->count && p->tokens->items[scan].kind == T_EQUAL
+            && (scan + 1 >= p->tokens->count || p->tokens->items[scan + 1].kind != T_EQUAL)) {
+            /* index assignment: parse name[key] as expression then consume '=' and RHS */
+            s = new_statement(p, S_INDEX_ASSIGN, token->at);
+            s->expr = parse_expression(p, 0); /* evaluates name[key] → E_INDEX node */
+            expect(p, T_EQUAL, "expected '=' in index assignment");
+            s->expr2 = parse_expression(p, 0);
+        } else {
+            s = new_statement(p, S_EXPR, token->at);
+            s->expr = parse_expression(p, 0);
+            if (s->expr->kind != E_CALL) syntax_error(p, token->at, "expected a declaration, assignment, or function call");
+        }
     } else if (token->kind == T_NAME && p->tokens->items[p->pos + 1].kind == T_EQUAL) {
         s = new_statement(p, S_ASSIGN, token->at); s->name = parse_name(p);
         p->pos++; s->expr = parse_expression(p, 0);

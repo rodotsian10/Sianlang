@@ -1,0 +1,105 @@
+|| SianLang 0.4.1 - 던전 탐험 텍스트 RPG (Dungeon Explorer RPG)
+
+log "========================================"
+log "   🗡️  SianLang 던전 탐험가 RPG  🛡️   "
+log "========================================"
+
+|| 1. 플레이어 상태 (Dict & List 사용)
+var player = {"name": "용사", "hp": 50, "max_hp": 50, "atk": 12, "gold": 0}
+var inv = ["낡은 단검", "체력 포션"]
+int floor = 1
+bool alive = true
+
+str p_name = player["name"]
+log.f("환영합니다, {p_name}님! 던전 탐험을 시작합니다.")
+
+while alive and floor <= 5
+    int cur_hp = player["hp"]
+    int max_hp = player["max_hp"]
+    int cur_gold = player["gold"]
+    str weapon = inv[0]
+
+    log.f("\n--- [ 던전 {floor}층 ] ---")
+    log.f("체력: {cur_hp}/{max_hp} | 골드: {cur_gold}G | 무기: {weapon}")
+    
+    log "1: 탐험하기  2: 물약 마시기  3: 소지품 보기  4: 도망치기"
+    int choice = 0
+    try
+        choice = int(input("행동 선택 (1-4) > "))
+    catch err
+        log "1~4 사이의 숫자를 입력하세요."
+        continue
+
+    if choice == 1
+        || 몬스터 만남 (random.choice)
+        var monster_types = ["슬라임", "고블린", "해골전사"]
+        var m_name = random.choice(monster_types)
+        int m_hp = random.int(15, 30)
+        int m_atk = random.int(5, 10)
+        log.f("👾 야생의 {m_name}(HP: {m_hp}, ATK: {m_atk})을(를) 만났습니다!")
+        
+        || 전투 루프
+        int p_atk = player["atk"]
+        while m_hp > 0 and player["hp"] > 0
+            int p_damage = random.int(p_atk - 3, p_atk + 3)
+            m_hp = max(0, m_hp - p_damage)
+            log.f("⚔️  {m_name}에게 {p_damage}의 데미지를 입혔습니다! (몬스터 HP: {m_hp})")
+            
+            if m_hp > 0
+                int m_damage = random.int(m_atk - 2, m_atk + 2)
+                int new_hp = max(0, player["hp"] - m_damage)
+                player["hp"] = new_hp
+                log.f("💥 {m_name}의 공격! {m_damage}의 데미지를 받았습니다! (남은 HP: {new_hp})")
+        
+        if player["hp"] <= 0
+            log "☠️  체력이 0이 되어 전사하였습니다..."
+            alive = false
+        else
+            int reward = random.int(10, 25)
+            player["gold"] = player["gold"] + reward
+            int total_gold = player["gold"]
+            log.f("✨ 전투 승리! {reward} 골드를 획득했습니다. (전체 골드: {total_gold}G)")
+            floor = floor + 1
+
+    else if choice == 2
+        || 포션 사용 (list.pop / index assignment)
+        if len(inv) > 1
+            var potion = inv.pop()
+            int heal = 25
+            int restored = min(player["max_hp"], player["hp"] + heal)
+            player["hp"] = restored
+            int hp_now = player["hp"]
+            int hp_max = player["max_hp"]
+            log.f("🧪 {potion}을 마셨습니다! HP가 {hp_now}/{hp_max}로 회복되었습니다.")
+        else
+            log "❌ 사용 가능한 포션이 없습니다."
+
+    else if choice == 3
+        || 소지품 및 상태 (dict.items / list iteration)
+        log "🎒 [소지품 목록]"
+        for item in inv
+            log.f(" - {item}")
+        log "📊 [상태 상세 정보]"
+        for pair in player.items()
+            log pair
+
+    else if choice == 4
+        log "🏃 도망쳤습니다! 게임을 종료합니다."
+        break
+
+|| 2. 모험 결과 저장 (File I/O)
+if floor > 5
+    log "\n🏆 축하합니다! 던전 5층을 모두 클리어하고 전설의 보물을 얻었습니다!"
+
+try
+    var log_file = open("rpg_adventure_log.txt", "w")
+    log_file.write("=== SianLang 던전 탐험 모험 기록 ===\n")
+    log_file.write(str(player["name"]) + "의 탐험 결과:\n")
+    log_file.write("도달 층수: " + str(floor) + "층\n")
+    log_file.write("최종 골드: " + str(player["gold"]) + "G\n")
+    log_file.close()
+    log "📝 모험 기록이 'rpg_adventure_log.txt' 파일에 저장되었습니다."
+catch err
+    log.f("기록 저장 실패: {err}")
+
+log "게임을 종료합니다."

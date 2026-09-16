@@ -1,2 +1,5 @@
-str name = input("Name: ")
-log "Hello, " + name
+try
+	str name = input("Name: ")
+	log "Hello, " + name
+catch error
+	log "Input failed."

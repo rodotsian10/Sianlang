@@ -37,14 +37,14 @@ with tempfile.TemporaryDirectory(prefix='배포 확인 & ', dir=ROOT / 'build') 
         return result.stdout
     assert run(['--version']).strip() == f'SianLang {version}'
     assert 'Hello, SianLang!' in run(['examples/hello.sian'])
-    assert 'counter: 13' in run(['examples/features-demo.sian'])
+    assert '리스트 항목:' in run(['examples/collections-demo.sian'])
     with ZipFile(portable / f"{meta['name']}-{version}.vsix") as extension:
         assert extension.read('extension/bin/win32-x64/Sianlang.exe') == exe.read_bytes()
         assert extension.read('extension/icons/sianlang-file.svg') == (ROOT / 'Sianlangicon.svg').read_bytes()
         packed = json.loads(extension.read('extension/package.json'))
         assert packed['contributes']['languages'][0]['icon']['dark'] == './icons/sianlang-file.svg'
         snippets = json.loads(extension.read('extension/snippets/sianlang.json'))
-        assert len(snippets) == 6
+        assert len(snippets) == 9
         assert extension.read('extension/LICENSE') == (ROOT / 'LICENSE').read_bytes()
     assert (portable / 'LICENSE').read_bytes() == (ROOT / 'LICENSE').read_bytes()
 print('Release checks passed: SHA256, download links, clean-PATH portable execution, bundled runtime and icon.')

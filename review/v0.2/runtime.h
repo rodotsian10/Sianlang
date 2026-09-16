@@ -1,8 +1,84 @@
 #ifndef SIAN_RUNTIME_H
 #define SIAN_RUNTIME_H
 
-#include "values.h"
-#include "printing.h"
+typedef struct { size_t refs, length; char text[]; } String;
+typedef struct {
+    ValueType type;
+    union { int64_t integer; double decimal; String *string; int boolean; } as;
+} Value;
+typedef struct { const char *name; ValueType type; Value value; } Variable;
+typedef struct Env { Variable *vars; size_t count, capacity; struct Env *parent; } Env;
+typedef enum { FLOW_NORMAL, FLOW_RETURN, FLOW_BREAK, FLOW_CONTINUE, FLOW_ERROR } FlowKind;
+typedef struct { FlowKind kind; Value value; } Flow;
+typedef struct {
+    Statement *program;
+    Env global;
+    unsigned int call_depth, eval_depth, block_depth;
+} Runtime;
+static size_t live_strings;
+
+static Value nothing(void) { Value v = {0}; return v; }
+static Value integer_value(int64_t n) { Value v = {.type = V_INT}; v.as.integer = n; return v; }
+static Value boolean_value(int b) { Value v = {.type = V_BOOL}; v.as.boolean = b != 0; return v; }
+static Value decimal_value(double d, Location at) {
+    if (!isfinite(d)) { error_at(at, "floating-point result is outside the finite range"); return nothing(); }
+    Value v = {.type = V_FLOAT}; v.as.decimal = d; return v;
+}
+static Value text_value(const char *text, size_t length, Location at) {
+    if (length > TEXT_LIMIT) { error_at(at, "string exceeds 16 MiB limit"); return nothing(); }
+    String *s = resize(NULL, sizeof(*s) + length + 1);
+    s->refs = 1; s->length = length;
+    memcpy(s->text, text, length); s->text[length] = '\0';
+    live_strings++;
+    Value v = {.type = V_STR}; v.as.string = s; return v;
+}
+static Value retain(Value v) { if (v.type == V_STR) v.as.string->refs++; return v; }
+static void release(Value v) {
+    if (v.type == V_STR && --v.as.string->refs == 0) { free(v.as.string); live_strings--; }
+}
+static const char *type_label(ValueType type) {
+    static const char *labels[] = {"void", "int", "float", "str", "bool"};
+    return labels[type];
+}
+static int numeric(Value v) { return v.type == V_INT || v.type == V_FLOAT; }
+static double number(Value v) { return v.type == V_INT ? (double)v.as.integer : v.as.decimal; }
+static int truth_value(Value v, Location at) {
+    switch (v.type) {
+        case V_INT: return v.as.integer != 0;
+        case V_FLOAT: return v.as.decimal != 0;
+        case V_STR: return v.as.string->length != 0;
+        case V_BOOL: return v.as.boolean;
+        default: error_at(at, "a function without a return value cannot be used as a condition"); return 0;
+    }
+}
+static Variable *find_local(Env *env, const char *name) {
+    for (size_t i = 0; i < env->count; i++) if (!strcmp(env->vars[i].name, name)) return &env->vars[i];
+    return NULL;
+}
+static Variable *find_variable(Env *env, const char *name) {
+    for (; env; env = env->parent) {
+        Variable *v = find_local(env, name);
+        if (v) return v;
+    }
+    return NULL;
+}
+static void define_variable(Env *env, const char *name, ValueType type, Value value) {
+    Variable *v = find_local(env, name);
+    if (!v) {
+        if (env->count == env->capacity) {
+            env->capacity = env->capacity ? env->capacity * 2 : 16;
+            env->vars = resize(env->vars, env->capacity * sizeof(*env->vars));
+        }
+        v = &env->vars[env->count++];
+        *v = (Variable){name, type, nothing()};
+    }
+    release(v->value); v->value = retain(value);
+}
+static void free_env(Env *env) {
+    for (size_t i = 0; i < env->count; i++) release(env->vars[i].value);
+    free(env->vars);
+}
+
 static const char *skip_space(const char *s) { while (isspace((unsigned char)*s)) s++; return s; }
 static int decimal_text(const char *s) {
     s = skip_space(s);
@@ -21,10 +97,15 @@ static int decimal_text(const char *s) {
 /* Returns an owned value; the caller still owns its input value. */
 static Value convert_value(Value value, ValueType target, Location at) {
     if (value.type == target) return retain(value);
-    if (target == V_STR) return display_value(value, 0, at);
     if (value.type == V_VOID) {
-        if (target == V_BOOL) return boolean_value(0);
-        error_at(at, "cannot convert None to %s", type_label(target)); return nothing();
+        error_at(at, "cannot convert a function without a return value"); return nothing();
+    }
+    if (target == V_STR) {
+        char buffer[96];
+        if (value.type == V_INT) snprintf(buffer, sizeof(buffer), "%" PRId64, value.as.integer);
+        else if (value.type == V_FLOAT) snprintf(buffer, sizeof(buffer), "%.15g", value.as.decimal);
+        else snprintf(buffer, sizeof(buffer), "%s", value.as.boolean ? "true" : "false");
+        return text_value(buffer, strlen(buffer), at);
     }
     if (value.type == V_STR) {
         const char *s = skip_space(value.as.string->text);
@@ -95,13 +176,13 @@ static int compare_numeric(Value a, Value b) {
     return a.as.decimal < b.as.decimal ? -1 : a.as.decimal > b.as.decimal ? 1 : 0;
 }
 static Value compare_values(Operator op, Value a, Value b, Location at) {
+    if (a.type == V_VOID || b.type == V_VOID) {
+        error_at(at, "cannot compare a function without a return value"); return nothing();
+    }
     int cmp;
     if (numeric(a) && numeric(b)) cmp = compare_numeric(a, b);
     else if (a.type == V_STR && b.type == V_STR) cmp = strcmp(a.as.string->text, b.as.string->text);
     else if (a.type == V_BOOL && b.type == V_BOOL && (op == OP_EQ || op == OP_NE)) cmp = a.as.boolean - b.as.boolean;
-    else if ((op == OP_EQ || op == OP_NE) && a.type == V_VOID && b.type == V_VOID) cmp = 0;
-    else if ((op == OP_EQ || op == OP_NE) && a.type == V_FUNCTION && b.type == V_FUNCTION) cmp = a.as.function != b.as.function;
-    else if ((op == OP_EQ || op == OP_NE) && (a.type == V_TUPLE || a.type == V_LIST || a.type == V_DICT || a.type == V_FILE) && a.type == b.type) cmp = a.as.list != b.as.list;
     else if ((op == OP_EQ || op == OP_NE) && a.type != b.type) return boolean_value(op == OP_NE);
     else { error_at(at, "cannot order %s and %s", type_label(a.type), type_label(b.type)); return nothing(); }
     return boolean_value(op == OP_EQ ? cmp == 0 : op == OP_NE ? cmp != 0 : op == OP_LT ? cmp < 0 :
@@ -171,102 +252,67 @@ static Value arithmetic(Operator op, Value a, Value b, Location at) {
 static Value evaluate(Runtime *runtime, Env *env, Expr *expr);
 static Flow execute(Runtime *runtime, Env *env, Statement *statement);
 
-#include "calls.h"
+static Value call_function(Runtime *runtime, Env *env, Expr *expr) {
+    int is_input = !strcmp(expr->text, "input");
+    ValueType conversion = type_named(expr->text);
+    Statement *function = NULL;
+    if (!is_input && !conversion) {
+        for (Statement *s = runtime->program; s; s = s->next)
+            if (s->kind == S_FUNCTION && !strcmp(s->name, expr->text)) { function = s; break; }
+        if (!function) { error_at(expr->at, "function '%s' not found", expr->text); return nothing(); }
+        if (expr->argc != function->parameter_count) {
+            error_at(expr->at, "function '%s' expects %zu arguments, got %zu", expr->text, function->parameter_count, expr->argc);
+            return nothing();
+        }
+    } else if ((conversion && expr->argc != 1) || (is_input && expr->argc > 1)) {
+        error_at(expr->at, "wrong number of arguments to '%s'", expr->text); return nothing();
+    }
+    if (runtime->call_depth >= DEPTH_LIMIT) {
+        error_at(expr->at, "call depth exceeds %u", DEPTH_LIMIT); return nothing();
+    }
+    Value *args = resize(NULL, expr->argc * sizeof(Value));
+    size_t count = 0;
+    for (ExprList *item = expr->args; item && !has_error; item = item->next) {
+        args[count] = evaluate(runtime, env, item->value);
+        if (!has_error && args[count].type == V_VOID) error_at(item->value->at, "argument has no return value");
+        count++;
+    }
+    Value result = nothing();
+    if (!has_error) {
+        if (is_input) result = input_value(args, count, expr->at);
+        else if (conversion) result = convert_value(args[0], conversion, expr->at);
+        else {
+            Env local = {.parent = &runtime->global};
+            size_t i = 0;
+            for (NameList *param = function->params; param; param = param->next) {
+                define_variable(&local, param->name, args[i].type, args[i]); i++;
+            }
+            runtime->call_depth++;
+            Flow flow = execute(runtime, &local, function->body);
+            runtime->call_depth--;
+            if (flow.kind == FLOW_RETURN && !has_error) result = flow.value;
+            else release(flow.value);
+            free_env(&local);
+            if (has_error) fprintf(stderr, "  called from %s at line %d, column %d\n", expr->text, expr->at.line, expr->at.column);
+        }
+    }
+    for (size_t i = 0; i < count; i++) release(args[i]);
+    free(args);
+    return result;
+}
 
 static Value evaluate_inner(Runtime *runtime, Env *env, Expr *expr) {
     switch (expr->kind) {
-        case E_NONE: return nothing();
         case E_INT: return integer_value(expr->integer);
         case E_FLOAT: return decimal_value(expr->decimal, expr->at);
         case E_BOOL: return boolean_value(expr->integer != 0);
         case E_STRING: return text_value(expr->text, strlen(expr->text), expr->at);
         case E_NAME: {
             Variable *v = find_variable(env, expr->text);
-            if (!v && (builtin_named(expr->text) || !strcmp(expr->text, "log.f"))) return builtin_value(runtime, expr->text);
             if (!v) { error_at(expr->at, "variable '%s' not found", expr->text); return nothing(); }
             return retain(v->value);
         }
         case E_CALL: return call_function(runtime, env, expr);
-        case E_TUPLE: {
-            Value *items = resize(NULL, expr->argc * sizeof(Value));
-            size_t count = 0;
-            for (ExprList *item = expr->args; item && !has_error; item = item->next) items[count++] = evaluate(runtime, env, item->value);
-            Value result = has_error ? nothing() : tuple_value(runtime, items, count);
-            for (size_t i = 0; i < count; i++) release(items[i]);
-            free(items); return result;
-        }
-        case E_LIST: {
-            Value *items = resize(NULL, expr->argc * sizeof(Value));
-            size_t count = 0;
-            for (ExprList *item = expr->args; item && !has_error; item = item->next) items[count++] = evaluate(runtime, env, item->value);
-            Value result = has_error ? nothing() : list_value(runtime, items, count);
-            for (size_t i = 0; i < count; i++) release(items[i]);
-            free(items); return result;
-        }
-        case E_DICT: {
-            Value *keys = resize(NULL, expr->argc * sizeof(Value));
-            Value *values = resize(NULL, expr->argc * sizeof(Value));
-            size_t count = 0;
-            for (ExprList *item = expr->args; item && !has_error; item = item->next) {
-                keys[count] = evaluate(runtime, env, item->value);
-                item = item->next;
-                if (!item) { error_at(expr->at, "dictionary entry needs a value"); break; }
-                values[count++] = evaluate(runtime, env, item->value);
-            }
-            Value result = has_error ? nothing() : dict_value(runtime, keys, values, count);
-            for (size_t i = 0; i < count; i++) { release(keys[i]); release(values[i]); }
-            free(keys); free(values); return result;
-        }
-        case E_MEMBER:
-            error_at(expr->at, "member access is not supported here"); return nothing();
-        case E_INDEX: {
-            Value value = evaluate(runtime, env, expr->left);
-            Value index = has_error ? nothing() : evaluate(runtime, env, expr->right);
-            Value result = nothing();
-            if (!has_error) {
-                if (value.type == V_STR) {
-                    /* UTF-8 character indexing */
-                    if (index.type != V_INT) error_at(expr->at, "string index must be int");
-                    else {
-                        int64_t char_count = (int64_t)character_count(value.as.string->text, value.as.string->length);
-                        int64_t i = index.as.integer;
-                        if (i < 0) i += char_count;
-                        if (i < 0 || i >= char_count) error_at(expr->at, "string index out of range");
-                        else {
-                            size_t byte_off = utf8_char_offset(value.as.string->text, value.as.string->length, i);
-                            size_t char_bytes = utf8_char_bytes(value.as.string->text, byte_off);
-                            result = text_value(value.as.string->text + byte_off, char_bytes, expr->at);
-                        }
-                    }
-                } else if (value.type == V_DICT) {
-                    for (size_t i = 0; i < value.as.dict->count; i++) {
-                        Value equal = compare_values(OP_EQ, value.as.dict->items[i].key, index, expr->at);
-                        int match = !has_error && equal.type == V_BOOL && equal.as.boolean;
-                        release(equal);
-                        if (match) { result = retain(value.as.dict->items[i].value); break; }
-                    }
-                    if (!has_error && result.type == V_VOID) error_at(expr->at, "dictionary key not found");
-                } else if ((value.type != V_TUPLE && value.type != V_LIST) || index.type != V_INT) error_at(expr->at, "indexing requires a tuple or list and an int index");
-                else {
-                    int64_t i = index.as.integer, count = (int64_t)(value.type == V_TUPLE ? value.as.tuple->count : value.as.list->count);
-                    if (i < 0) i += count;
-                    if (i < 0 || i >= count) error_at(expr->at, "variadic argument index out of range");
-                    else result = retain(value.type == V_TUPLE ? value.as.tuple->items[i] : value.as.list->items[i]);
-                }
-            }
-            release(value); release(index); return result;
-        }
-        case E_FORMAT: {
-            TextBuffer text = {.at = expr->at};
-            for (ExprList *part = expr->args; part && !has_error; part = part->next) {
-                Value value = evaluate(runtime, env, part->value);
-                Value formatted = has_error ? nothing() : format_field(value, part->format, part->value->at);
-                if (!has_error) append_text(&text, formatted.as.string->text, formatted.as.string->length);
-                release(value); release(formatted);
-            }
-            Value result = has_error ? nothing() : text_value(text.text ? text.text : "", text.count, expr->at);
-            free(text.text); return result;
-        }
         case E_UNARY: {
             Value right = evaluate(runtime, env, expr->right), result = nothing();
             if (!has_error) {
@@ -309,42 +355,25 @@ static Value evaluate(Runtime *runtime, Env *env, Expr *expr) {
 }
 
 static Value assignment_value(Value v, ValueType target, Expr *expr, const char *name) {
-    if (target == V_ANY) return retain(v);
     if (v.type == target) return retain(v);
-    int direct_input = expr->kind == E_CALL && expr->left->kind == E_NAME && !strcmp(expr->left->text, "input");
+    int direct_input = expr->kind == E_CALL && !strcmp(expr->text, "input");
     if (direct_input || (target == V_FLOAT && v.type == V_INT)) return convert_value(v, target, expr->at);
     error_at(expr->at, "variable '%s' expects %s, got %s", name, type_label(target), type_label(v.type));
     return nothing();
 }
+static void log_value(Value value, Location at) {
+    switch (value.type) {
+        case V_STR: puts(value.as.string->text); break;
+        case V_INT: printf("%" PRId64 "\n", value.as.integer); break;
+        case V_FLOAT: printf("%.15g\n", value.as.decimal); break;
+        case V_BOOL: puts(value.as.boolean ? "true" : "false"); break;
+        default: error_at(at, "cannot log a function without a return value"); break;
+    }
+}
+
 static Flow execute_inner(Runtime *runtime, Env *env, Statement *statement) {
     for (Statement *s = statement; s && !has_error; s = s->next) {
-        collect(runtime, 0);
-        if (s->kind == S_FUNCTION) {
-            Variable *previous = find_local(env, s->name);
-            if (previous && previous->type != V_ANY && previous->type != V_FUNCTION) {
-                error_at(s->at, "function '%s' conflicts with a typed variable", s->name); break;
-            }
-            Value function = create_function(runtime, env, s);
-            if (!has_error) define_variable(env, s->name, V_ANY, function);
-            release(function); continue;
-        }
-        if (s->kind == S_TRY) {
-            Flow flow = execute(runtime, env, s->body);
-            if (flow.kind == FLOW_ERROR) {
-                Value message = text_value(error_message, strlen(error_message), s->at);
-                has_error = 0; error_message[0] = '\0'; error_trace[0] = '\0';
-                if (s->name) {
-                    Variable *previous = find_local(env, s->name);
-                    if (previous && previous->type != V_ANY && previous->type != V_STR)
-                        error_at(s->at, "catch name '%s' conflicts with a typed variable", s->name);
-                    else define_variable(env, s->name, V_ANY, message);
-                }
-                release(message); release(flow.value);
-                flow = has_error ? (Flow){FLOW_ERROR, nothing()} : execute(runtime, env, s->otherwise);
-            }
-            if (flow.kind != FLOW_NORMAL) return flow;
-            continue;
-        }
+        if (s->kind == S_FUNCTION) continue;
         if (s->kind == S_BREAK) return (Flow){FLOW_BREAK, nothing()};
         if (s->kind == S_CONTINUE) return (Flow){FLOW_CONTINUE, nothing()};
         if (s->kind == S_IF) {
@@ -367,7 +396,6 @@ static Flow execute_inner(Runtime *runtime, Env *env, Statement *statement) {
         }
         if (s->kind == S_WHILE || s->kind == S_REPEAT) {
             int64_t remaining = 0;
-            int broken = 0;
             if (s->kind == S_REPEAT) {
                 Value count = evaluate(runtime, env, s->expr);
                 if (!has_error && (count.type != V_INT || count.as.integer < 0))
@@ -385,116 +413,12 @@ static Flow execute_inner(Runtime *runtime, Env *env, Statement *statement) {
                 }
                 Flow flow = execute(runtime, env, s->body);
                 if (flow.kind == FLOW_RETURN || flow.kind == FLOW_ERROR) return flow;
-                if (flow.kind == FLOW_BREAK) { broken = 1; break; }
-            }
-            if (!has_error && !broken && s->otherwise) {
-                Flow flow = execute(runtime, env, s->otherwise);
-                if (flow.kind != FLOW_NORMAL) return flow;
+                if (flow.kind == FLOW_BREAK) break;
             }
             continue;
         }
-        if (s->kind == S_FOR) {
-            Value iterable = evaluate(runtime, env, s->expr);
-            size_t count = 0;
-            if (!has_error && iterable.type == V_TUPLE) count = iterable.as.tuple->count;
-            else if (!has_error && iterable.type == V_LIST) count = iterable.as.list->count;
-            else if (!has_error && iterable.type == V_DICT) count = iterable.as.dict->count;
-            else if (!has_error && iterable.type == V_STR) { /* UTF-8 character iteration */ }
-            else if (!has_error) error_at(s->at, "for requires a tuple, list, dict, str, or range");
-            int broken = 0;
-            if (!has_error && iterable.type == V_STR) {
-                /* Iterate over UTF-8 characters */
-                const char *text = iterable.as.string->text;
-                size_t bytes = iterable.as.string->length;
-                size_t pos = 0;
-                while (pos < bytes && !has_error) {
-                    size_t char_bytes = utf8_char_bytes(text, pos);
-                    Value item = text_value(text + pos, char_bytes, s->at);
-                    pos += char_bytes;
-                    Variable *variable = find_local(env, s->name);
-                    if (variable) { release(variable->value); variable->value = retain(item); }
-                    else define_variable(env, s->name, V_ANY, item);
-                    release(item);
-                    if (has_error) break;
-                    Flow flow = execute(runtime, env, s->body);
-                    if (flow.kind == FLOW_RETURN || flow.kind == FLOW_ERROR) { release(iterable); return flow; }
-                    if (flow.kind == FLOW_BREAK) { broken = 1; break; }
-                }
-            } else {
-                for (size_t i = 0; i < count && !has_error; i++) {
-                    Value item = iterable.type == V_TUPLE ? retain(iterable.as.tuple->items[i]) : iterable.type == V_LIST ? retain(iterable.as.list->items[i]) : retain(iterable.as.dict->items[i].key);
-                    Variable *variable = find_local(env, s->name);
-                    if (variable) { release(variable->value); variable->value = retain(item); }
-                    else define_variable(env, s->name, V_ANY, item);
-                    release(item);
-                    if (has_error) break;
-                    Flow flow = execute(runtime, env, s->body);
-                    if (flow.kind == FLOW_RETURN || flow.kind == FLOW_ERROR) { release(iterable); return flow; }
-                    if (flow.kind == FLOW_BREAK) { broken = 1; break; }
-                }
-            }
-            release(iterable);
-            if (!has_error && !broken && s->otherwise) {
-                Flow flow = execute(runtime, env, s->otherwise);
-                if (flow.kind != FLOW_NORMAL) return flow;
-            }
-            continue;
-        }
-        /* ── Index assignment: collection[key] = value ── */
-        if (s->kind == S_INDEX_ASSIGN) {
-            if (s->expr->kind != E_INDEX) { error_at(s->at, "invalid index assignment target"); break; }
-            Value container = evaluate(runtime, env, s->expr->left);
-            Value key = has_error ? nothing() : evaluate(runtime, env, s->expr->right);
-            Value val = has_error ? nothing() : evaluate(runtime, env, s->expr2);
-            if (!has_error) {
-                if (container.type == V_LIST) {
-                    if (key.type != V_INT) error_at(s->at, "list index must be int");
-                    else {
-                        int64_t idx = key.as.integer;
-                        int64_t len = (int64_t)container.as.list->count;
-                        if (idx < 0) idx += len;
-                        if (idx < 0 || idx >= len) error_at(s->at, "list index out of range");
-                        else {
-                            release(container.as.list->items[idx]);
-                            container.as.list->items[idx] = retain(val);
-                        }
-                    }
-                } else if (container.type == V_DICT) {
-                    Dict *dict = container.as.dict;
-                    int found = 0;
-                    for (size_t i = 0; i < dict->count && !has_error; i++) {
-                        Value eq = compare_values(OP_EQ, dict->items[i].key, key, s->at);
-                        if (!has_error && eq.as.boolean) {
-                            release(dict->items[i].value);
-                            dict->items[i].value = retain(val);
-                            found = 1;
-                        }
-                        release(eq);
-                        if (found) break;
-                    }
-                    if (!found && !has_error) {
-                        /* new key */
-                        if (dict->count == dict->capacity) {
-                            dict->capacity = dict->capacity ? dict->capacity * 2 : 8;
-                            dict->items = resize(dict->items, dict->capacity * sizeof(DictEntry));
-                        }
-                        dict->items[dict->count].key = retain(key);
-                        dict->items[dict->count].value = retain(val);
-                        dict->count++;
-                    }
-                } else if (container.type == V_STR) {
-                    error_at(s->at, "str does not support item assignment (strings are immutable)");
-                } else if (container.type == V_TUPLE) {
-                    error_at(s->at, "tuple does not support item assignment (tuples are immutable)");
-                } else {
-                    error_at(s->at, "'%s' does not support index assignment", type_label(container.type));
-                }
-            }
-            release(container); release(key); release(val);
-            if (has_error) break;
-            continue;
-        }
-        /* ── Variable resolve for S_ASSIGN ── */
+        /* Resolve assignment target before running its RHS, but re-resolve after calls
+           because declarations inside a called function can grow an environment. */
         ValueType target = s->type;
         if (s->kind == S_ASSIGN) {
             Variable *v = find_variable(env, s->name);
@@ -509,7 +433,11 @@ static Flow execute_inner(Runtime *runtime, Env *env, Statement *statement) {
         Value value = evaluate(runtime, env, s->expr);
         if (has_error) { release(value); break; }
         if (s->kind == S_RETURN) return (Flow){FLOW_RETURN, value};
-        if (s->kind == S_DECLARE || s->kind == S_ASSIGN) {
+        if (s->kind == S_LOG) log_value(value, s->at);
+        else if (s->kind == S_ERROR) {
+            if (value.type != V_STR) error_at(s->at, "iferror message must be str");
+            else error_at(s->at, "%s", value.as.string->text);
+        } else if (s->kind == S_DECLARE || s->kind == S_ASSIGN) {
             Value converted = assignment_value(value, target, s->expr, s->name);
             if (!has_error) {
                 if (s->kind == S_DECLARE) define_variable(env, s->name, target, converted);
@@ -535,13 +463,11 @@ static Flow execute(Runtime *runtime, Env *env, Statement *statement) {
 }
 static void run_program(Statement *program) {
     Runtime runtime = {.program = program};
-    runtime.global = new_env(&runtime, NULL);
-    Flow flow = execute(&runtime, runtime.global, program);
+    Flow flow = execute(&runtime, &runtime.global, program);
     release(flow.value);
-    runtime.global->object.refs--;
-    collect(&runtime, 1);
-    if (live_strings || runtime.object_count) {
-        fprintf(stderr, "[Internal error] %zu strings, %zu objects remain\n", live_strings, runtime.object_count);
+    free_env(&runtime.global);
+    if (live_strings) {
+        fprintf(stderr, "[Internal error] %zu string allocations remain\n", live_strings);
         has_error = 1;
     }
 }

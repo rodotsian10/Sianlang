@@ -1,3 +1,19 @@
+# SianLang 0.4.1
+
+- 컬렉션 인덱스 대입 지원 (`list[idx] = val`, `dict[key] = val`, 음수 인덱싱 및 딕셔너리 신규 키 추가).
+- 리스트/딕셔너리 메서드 추가 (`list.append`, `list.pop`, `dict.keys`, `dict.values`, `dict.items`).
+- UTF-8 문자열 인덱싱 (`str[idx]`) 및 `for` 문 글자 단위 순회 지원.
+- 수학 내장함수 (`abs`, `min`, `max`, `round`) 및 난수 내장함수 (`random.int`, `random.float`, `random.choice`) 추가.
+- 파일 I/O 내장함수 및 메서드 추가 (`open`, `file.read`, `file.write`, `file.close`) 및 `try/catch` 예외 처리 연동.
+- 객체 pointer equality 비교 연산자 (`==`, `!=`) 컬렉션 및 파일 객체 확장.
+
+# SianLang 0.4.0
+
+- list, tuple, dict 리터럴과 인덱싱 추가.
+- `for item in ...` 반복과 `range()` 세 가지 형식 추가.
+- `time.now()` 현재 Unix timestamp 추가.
+- 0.4 컬렉션·반복 회귀 테스트 추가.
+
 # SianLang 0.3.1
 
 - Windows x64 실행기를 포함한 VSIX와 예제·문서를 포함한 설치 없는 ZIP 배포.

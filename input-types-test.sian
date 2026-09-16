@@ -1,6 +1,9 @@
-int count = input("Count: ")
-float ratio = input("Ratio: ")
-bool ready = input("Ready (true/false): ")
-log count
-log ratio
-log ready
+try
+	int count = input("Count: ")
+	float ratio = input("Ratio: ")
+	bool ready = input("Ready (true/false): ")
+	log count
+	log ratio
+	log ready
+catch error
+	log "Input type did not match."

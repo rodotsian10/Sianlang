@@ -1,0 +1,11 @@
+var numbers = [1, 2, 3]
+var pair = ("a", "b")
+log numbers
+log pair
+log numbers[1]
+for item in numbers
+    log item
+log range(3)
+for item in range(2, 7, 2)
+    log item
+log time.now()

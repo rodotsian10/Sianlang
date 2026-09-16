@@ -4,8 +4,7 @@
 typedef enum {
     T_EOF, T_NEWLINE, T_INDENT, T_DEDENT, T_NAME, T_NUMBER, T_STRING,
     T_LPAREN, T_RPAREN, T_COMMA, T_PLUS, T_MINUS, T_STAR, T_SLASH,
-    T_PERCENT, T_BANG, T_EQUAL, T_EQ, T_NE, T_LT, T_LE, T_GT, T_GE,
-    T_DOT, T_HASH, T_LBRACKET, T_RBRACKET, T_LBRACE, T_RBRACE, T_COLON
+    T_PERCENT, T_BANG, T_EQUAL, T_EQ, T_NE, T_LT, T_LE, T_GT, T_GE
 } TokenKind;
 typedef struct { TokenKind kind; char *text; Location at; } Token;
 typedef struct { Token *items; size_t count, capacity; } TokenList;
@@ -150,13 +149,6 @@ static void lex(const char *text, TokenList *list, Arena *arena) {
             case '=': kind = T_EQUAL; break;
             case '<': kind = T_LT; break;
             case '>': kind = T_GT; break;
-            case '.': kind = T_DOT; break;
-            case '#': kind = T_HASH; break;
-            case '[': kind = T_LBRACKET; break;
-            case ']': kind = T_RBRACKET; break;
-            case '{': kind = T_LBRACE; break;
-            case '}': kind = T_RBRACE; break;
-            case ':': kind = T_COLON; break;
             default: error_at(at, "unexpected character (byte 0x%02x)", (unsigned int)ch); return;
         }
         pos++; column++;

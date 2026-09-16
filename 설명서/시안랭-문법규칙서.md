@@ -1,6 +1,6 @@
-# SianLang 0.3 문법 규칙서
+# SianLang 0.4.1 문법 규칙서
 
-이 문서는 현재 구현의 기준이다. 창·그래픽·이미지·소리·목록·객체·모듈은 아직 구현하지 않았다.
+이 문서는 SianLang 0.4.1 구현 기준이다. 컬렉션, 인덱스 대입, 메서드, UTF-8 문자열 인덱싱, 수학/난수 내장함수, 파일 I/O가 지원된다.
 
 ## 실행
 
@@ -128,11 +128,14 @@ log.f(template, end="!\n")
 선언 또는 대입의 오른쪽 식 전체가 `input(...)`이면 변수의 선언 타입에 맞춰 변환한다. `var`는 문자열 그대로 받는다. 다른 곳에 저장한 문자열은 명시적으로 변환한다.
 
 ```sian
-int age = input("나이: ")
-age = input("새 나이: ")
-str text = input("숫자 문자열: ")
-int count = int(text)
-log age + count
+try
+    int age = input("나이: ")
+    age = input("새 나이: ")
+    str text = input("숫자 문자열: ")
+    int count = int(text)
+    log age + count
+catch error
+    log "입력 형식이 올바르지 않습니다."
 ```
 
 ## 연산
@@ -153,6 +156,148 @@ log age + count
 우선순위는 높은 순서로 괄호/호출 → 단항 `+`, `-`, `!` → `*`, `/`, `%` → `+`, `-` → 비교 → `and` → `or`다. 연쇄 비교 `a < b < c`는 지원하지 않는다. `a < b and b < c`로 쓴다.
 
 조건에서는 숫자 0, 빈 문자열, false가 거짓이고 나머지는 참이다. None과 빈 가변인수 묶음도 거짓이며 함수 값은 참이다.
+
+## 컬렉션
+
+현재 컬렉션은 `list`, `tuple`, `dict` 세 가지입니다. 컬렉션은 `var`로 저장합니다.
+
+```sian
+var items = [1, 2, 3]
+var point = (10, 20)
+var user = {"name": "Sian", "age": 20}
+
+log items[0]
+log point[-1]
+log user["name"]
+log len(items), len(point), len(user)
+```
+
+- `list`는 대괄호로 만들며 순서가 있는 값 묶음입니다.
+- `tuple`은 괄호로 만들며 순서가 있는 불변 값 묶음입니다.
+- `dict`는 중괄호 안에 `key: value`를 적으며 key로 값을 조회합니다.
+- 빈 컬렉션도 사용할 수 있습니다: `[]`, `()`, `{}`.
+- 현재 인덱스 대입과 `append`, `pop`, `keys`, `values`는 다음 단계에서 추가합니다.
+
+## for와 range
+
+`for item in 값`은 list, tuple, dict, `range()`를 순회합니다. dict를 순회하면 key가 나옵니다.
+
+```sian
+for number in range(1, 6)
+    log number
+
+for item in ["a", "b", "c"]
+    log item
+```
+
+`range`는 다음 형식을 지원합니다.
+
+```text
+range(stop)
+range(start, stop)
+range(start, stop, step)
+```
+
+`stop`은 포함하지 않으며 `step`은 0일 수 없습니다. `for`에는 기존 `break`, `continue`, 반복문 `else`를 사용할 수 있습니다.
+
+## 현재 시간
+
+`time.now()`는 현재 Unix timestamp를 정수로 반환합니다.
+
+```sian
+int started = time.now()
+log started
+```
+
+## 인덱스 대입 및 컬렉션 메서드
+
+### 인덱스 대입 (Index Assignment)
+리스트(`list`)와 딕셔너리(`dict`)에 인덱스 및 키를 이용해 값을 변경하거나 추가할 수 있습니다.
+- `list[index] = value`: 지정 위치 값 변경 (음수 인덱스 지원)
+- `dict[key] = value`: 기존 키 값 변경 또는 신규 키 추가
+
+```sian
+var items = [10, 20, 30]
+items[0] = 99
+items[-1] = 77
+log items  || [99, 20, 77]
+
+var user = {"name": "Sian"}
+user["score"] = 100
+log user
+```
+
+### 컬렉션 메서드
+- `list.append(value)`: 리스트 끝에 항목 추가
+- `list.pop()`: 리스트 마지막 항목 제거 및 반환
+- `dict.keys()`: 키 목록 리스트 반환
+- `dict.values()`: 값 목록 리스트 반환
+- `dict.items()`: (키, 값) 튜플 목록 리스트 반환
+
+```sian
+var inv = ["검"]
+inv.append("방패")
+var top = inv.pop()
+
+var d = {"a": 1, "b": 2}
+for pair in d.items()
+    log pair
+```
+
+## 문자열 인덱싱 및 순회
+
+UTF-8 멀티바이트 글자 단위 인덱싱 및 `for` 순회가 가능합니다.
+- `str[index]`: 글자 가져오기 (음수 인덱스 지원)
+- `for ch in str`: 글자 단위 반복 순회
+
+```sian
+str name = "시안랭"
+log name[0]  || "시"
+log name[-1] || "랭"
+
+for ch in "시안"
+    log ch
+```
+
+## 수학 및 난수 내장함수
+
+### 수학 내장함수
+- `abs(x)`: 절대값 반환
+- `min(a, b, ...)` / `min(list)`: 최솟값 반환
+- `max(a, b, ...)` / `max(list)`: 최댓값 반환
+- `round(x, [ndigits])`: 반올림 수행
+
+### 난수 내장함수 (`random.*`)
+- `random.int(min, max)`: 범위를 포함하는 정수 난수
+- `random.float()`: `[0.0, 1.0)` 실수 난수
+- `random.choice(list)`: 리스트 무작위 요소 추출
+
+```sian
+log abs(-42)
+log min(10, 20, 5)
+log round(3.14159, 2)
+int dice = random.int(1, 6)
+var item = random.choice(["사과", "바나나"])
+```
+
+## 파일 I/O
+
+파일 열기, 읽기, 쓰기, 닫기를 지원합니다. 존재하지 않는 파일 열기는 `try/catch`로 예외 포착이 가능합니다.
+- `open(path, mode)`: 파일 열기 (`"r"`, `"w"`, `"a"`, `"rb"`, `"wb"`, `"ab"`)
+- `file.write(text)`: 텍스트 쓰기
+- `file.read()`: 내용 전체 읽기
+- `file.close()`: 파일 닫기
+
+```sian
+var file1 = open("test.txt", "w")
+file1.write("안녕 시안랭\n")
+file1.close()
+
+var file2 = open("test.txt", "r")
+str content = file2.read()
+file2.close()
+log content
+```
 
 ## 들여쓰기와 조건문
 

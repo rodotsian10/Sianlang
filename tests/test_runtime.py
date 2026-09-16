@@ -100,13 +100,13 @@ class RuntimeTests(unittest.TestCase):
         for filename, data, output, error in [
             ('input-test.sian', 'Sian\n', 'Name: Hello, Sian\n', None),
             ('input-types-test.sian', '3\n1.5\ntrue\n', 'Count: Ratio: Ready (true/false): 3\n1.5\nTrue\n', None),
-            ('try-catch-test.sian', '', 'before\ncaught\nafter\n', None),
+            ('try-catch-test.sian', '12\n', 'Enter a number: 12\nfinished\n', None),
         ]:
             with self.subTest(filename=filename):
                 self.check((ROOT / filename).read_text(encoding='utf-8'), output, error, data)
-        for data, expected in [('50\n', '정답입니다'), ('60\n', '50보다 큽니다'), ('40\n', '50보다 작습니다')]:
+        for data, expected in [('1\n1\n1\n1\n1\n', '아쉽습니다'), ('nope\n1\n1\n1\n1\n', '숫자만 입력해 주세요')]:
             with self.subTest(data=data):
-                p = self.run_source((ROOT / 'code.sian').read_text(encoding='utf-8'), data)
+                p = self.run_source((ROOT / 'guessing-game.sian').read_text(encoding='utf-8'), data)
                 self.assertEqual(p.returncode, 0, p.stderr)
                 self.assertIn(expected, p.stdout)
                 self.assertEqual(p.stderr, '')
@@ -230,7 +230,7 @@ class RuntimeTests(unittest.TestCase):
 
     def test_command_line(self):
         global EXECUTIONS
-        for args, code, fragment in [([], 1, 'Usage:'), (['--version'], 0, '0.3.1'),
+        for args, code, fragment in [([], 1, 'Usage:'), (['--version'], 0, '0.4.1'),
                                       (['missing.sian'], 1, 'cannot open'), (['file.txt'], 1, '.sian')]:
             with self.subTest(args=args):
                 EXECUTIONS += 1

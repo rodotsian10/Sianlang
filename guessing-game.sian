@@ -1,0 +1,52 @@
+|| SianLang 0.4.1 - 숫자 맞히기 게임 (Number Guessing Game)
+
+log "================================="
+log "   SianLang 숫자 맞히기 게임     "
+log "================================="
+
+|| 최고 기록 읽기 (File I/O + try/catch)
+int best_score = 999
+try
+    var f_in = open("guessing_best.txt", "r")
+    str score_text = f_in.read()
+    f_in.close()
+    best_score = int(score_text)
+    log.f("★ 현재 최고 기록: {best_score}회 시도")
+catch err
+    log "등록된 최고 기록이 없습니다. (첫 도전)"
+
+|| 비밀 숫자 생성
+int secret = (time.now() % 90) + 10
+int attempts = 0
+bool guessed = false
+
+log "10부터 99 사이의 비밀 숫자를 5번 안에 맞혀보세요!"
+
+repeat 5
+    attempts = attempts + 1
+    try
+        int guess = int(input("숫자: "))
+        if guess < secret
+            log "더 큽니다."
+        else if guess > secret
+            log "더 작습니다."
+        else
+            log.f("정답입니다! {attempts}번 만에 맞히셨습니다.")
+            guessed = true
+            break
+    catch err
+        log "숫자만 입력해 주세요."
+else
+    if guessed == false
+        log "아쉽습니다. 다음 기회에!"
+
+|| 최고 기록 저장 (File I/O)
+if guessed and attempts < best_score
+    log.f("🏆 축하합니다! 최고 기록 갱신! ({best_score}회 -> {attempts}회)")
+    try
+        var f_out = open("guessing_best.txt", "w")
+        f_out.write(str(attempts))
+        f_out.close()
+        log "새 최고 기록이 file('guessing_best.txt')에 저장되었습니다."
+    catch err
+        log.f("기록 저장 실패: {err}")

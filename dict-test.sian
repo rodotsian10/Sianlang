@@ -1,0 +1,6 @@
+var user = {"name": "Sian", "age": 20}
+log user
+log user["name"]
+log len(user)
+for key in user
+    log key

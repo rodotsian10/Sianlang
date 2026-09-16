@@ -1,0 +1,27 @@
+|| SianLang 0.4.1 - 컬렉션 인덱스 대입 & 메서드 예제
+
+|| 1. 리스트 대입 및 append / pop
+var items = [10, 20, 30]
+items[0] = 99
+items[-1] = 77
+items.append(100)
+log "리스트 항목:", items
+log "마지막 항목 추출(pop):", items.pop()
+log "최종 리스트:", items
+
+|| 2. 딕셔너리 대입 및 keys / values / items
+var user = {"name": "Sian", "score": 100}
+user["score"] = 200
+user["level"] = 5
+log "사용자 딕셔너리:", user
+log "키 목록:", user.keys()
+log "값 목록:", user.values()
+
+for pair in user.items()
+    log "항목:", pair
+
+|| 3. UTF-8 문자열 인덱싱 및 순회
+str text = "시안랭"
+log.f("첫 글자: {text[0]}, 마지막 글자: {text[-1]}")
+for ch in "안녕"
+    log "글자:", ch

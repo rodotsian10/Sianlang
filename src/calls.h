@@ -15,7 +15,10 @@ static void free_arguments(Arguments *args) {
     free(args->values); free(args->names);
 }
 static Value builtin_value(Runtime *rt, const char *name) {
-    static const char *names[] = {"log", "log.f", "input", "len", "int", "float", "str", "bool", "TF"};
+    static const char *names[] = {"log", "log.f", "input", "len", "range", "time.now",
+        "int", "float", "str", "bool", "TF",
+        "abs", "min", "max", "round",
+        "random.int", "random.float", "random.choice", "open"};
     Closure *fn = new_object(rt, sizeof(*fn), G_FUNCTION);
     for (size_t i = 0; i < sizeof(names) / sizeof(*names); i++) if (!strcmp(name, names[i])) { fn->builtin = names[i]; break; }
     Value result = {.type = V_FUNCTION}; result.as.function = fn; return result;
@@ -48,16 +51,270 @@ static Value print_arguments(Arguments *args, Location at) {
     if (!has_error && flush && fflush(stdout) == EOF) error_at(at, "console flush failed");
     return nothing();
 }
-static Value call_builtin(const char *name, Arguments *args, Location at) {
+
+/* ── UTF-8 helper: get byte offset of the i-th character ── */
+static size_t utf8_char_offset(const char *text, size_t bytes, int64_t char_index) {
+    size_t pos = 0, char_num = 0;
+    while (pos < bytes) {
+        if (((unsigned char)text[pos] & 0xc0) != 0x80) {
+            if ((int64_t)char_num == char_index) return pos;
+            char_num++;
+        }
+        pos++;
+    }
+    return pos; /* end of string */
+}
+static size_t utf8_char_bytes(const char *text, size_t start) {
+    unsigned char ch = (unsigned char)text[start];
+    if (ch < 0x80) return 1;
+    if (ch < 0xE0) return 2;
+    if (ch < 0xF0) return 3;
+    return 4;
+}
+
+/* ── Method dispatch for list / dict / str / file ── */
+static Value call_method(Runtime *rt, Value receiver, const char *method, Arguments *args, Location at) {
+    /* list.append(value) */
+    if (receiver.type == V_LIST && !strcmp(method, "append")) {
+        if (args->count != 1 || args->names[0]) { error_at(at, "append expects exactly 1 positional argument"); return nothing(); }
+        List *list = receiver.as.list;
+        if (list->count == list->capacity) {
+            list->capacity = list->capacity ? list->capacity * 2 : 8;
+            list->items = resize(list->items, list->capacity * sizeof(Value));
+        }
+        list->items[list->count++] = retain(args->values[0]);
+        return nothing();
+    }
+    /* list.pop() */
+    if (receiver.type == V_LIST && !strcmp(method, "pop")) {
+        if (args->count != 0) { error_at(at, "pop expects no arguments"); return nothing(); }
+        List *list = receiver.as.list;
+        if (list->count == 0) { error_at(at, "pop from empty list"); return nothing(); }
+        Value last = list->items[--list->count]; /* transfer ownership to caller */
+        return last;
+    }
+    /* dict.keys() */
+    if (receiver.type == V_DICT && !strcmp(method, "keys")) {
+        if (args->count != 0) { error_at(at, "keys expects no arguments"); return nothing(); }
+        Dict *dict = receiver.as.dict;
+        Value *items = resize(NULL, dict->count * sizeof(Value));
+        for (size_t i = 0; i < dict->count; i++) items[i] = retain(dict->items[i].key);
+        Value result = list_value(rt, items, dict->count);
+        for (size_t i = 0; i < dict->count; i++) release(items[i]);
+        free(items); return result;
+    }
+    /* dict.values() */
+    if (receiver.type == V_DICT && !strcmp(method, "values")) {
+        if (args->count != 0) { error_at(at, "values expects no arguments"); return nothing(); }
+        Dict *dict = receiver.as.dict;
+        Value *items = resize(NULL, dict->count * sizeof(Value));
+        for (size_t i = 0; i < dict->count; i++) items[i] = retain(dict->items[i].value);
+        Value result = list_value(rt, items, dict->count);
+        for (size_t i = 0; i < dict->count; i++) release(items[i]);
+        free(items); return result;
+    }
+    /* dict.items() — returns list of (key, value) tuples */
+    if (receiver.type == V_DICT && !strcmp(method, "items")) {
+        if (args->count != 0) { error_at(at, "items expects no arguments"); return nothing(); }
+        Dict *dict = receiver.as.dict;
+        Value *pairs = resize(NULL, dict->count * sizeof(Value));
+        for (size_t i = 0; i < dict->count && !has_error; i++) {
+            Value pair[2] = { retain(dict->items[i].key), retain(dict->items[i].value) };
+            pairs[i] = tuple_value(rt, pair, 2);
+            release(pair[0]); release(pair[1]);
+        }
+        Value result = has_error ? nothing() : list_value(rt, pairs, dict->count);
+        for (size_t i = 0; i < dict->count; i++) release(pairs[i]);
+        free(pairs); return result;
+    }
+    /* file.read() */
+    if (receiver.type == V_FILE && !strcmp(method, "read")) {
+        if (args->count != 0) { error_at(at, "read expects no arguments"); return nothing(); }
+        FileObj *f = receiver.as.file;
+        if (f->closed || !f->fp) { error_at(at, "I/O operation on closed file"); return nothing(); }
+        size_t count = 0, capacity = 4096;
+        char *buf = resize(NULL, capacity);
+        int ch;
+        while ((ch = fgetc(f->fp)) != EOF) {
+            if (count == TEXT_LIMIT) { free(buf); error_at(at, "file content exceeds 16 MiB limit"); return nothing(); }
+            if (count + 1 >= capacity) { capacity *= 2; buf = resize(buf, capacity); }
+            buf[count++] = (char)ch;
+        }
+        if (ferror(f->fp)) { free(buf); error_at(at, "file read error"); return nothing(); }
+        Value result = text_value(buf, count, at);
+        free(buf); return result;
+    }
+    /* file.readline() */
+    if (receiver.type == V_FILE && !strcmp(method, "readline")) {
+        if (args->count != 0) { error_at(at, "readline expects no arguments"); return nothing(); }
+        FileObj *f = receiver.as.file;
+        if (f->closed || !f->fp) { error_at(at, "I/O operation on closed file"); return nothing(); }
+        size_t count = 0, capacity = 256;
+        char *buf = resize(NULL, capacity);
+        int ch;
+        while ((ch = fgetc(f->fp)) != EOF && ch != '\n') {
+            if (count == TEXT_LIMIT) { free(buf); error_at(at, "line exceeds 16 MiB limit"); return nothing(); }
+            if (count + 1 >= capacity) { capacity *= 2; buf = resize(buf, capacity); }
+            buf[count++] = (char)ch;
+        }
+        if (ch == '\n') { if (count + 1 >= capacity) buf = resize(buf, count + 2); buf[count++] = '\n'; }
+        if (ferror(f->fp)) { free(buf); error_at(at, "file read error"); return nothing(); }
+        Value result = text_value(buf, count, at);
+        free(buf); return result;
+    }
+    /* file.write(str) */
+    if (receiver.type == V_FILE && !strcmp(method, "write")) {
+        if (args->count != 1 || args->names[0]) { error_at(at, "write expects exactly 1 positional str argument"); return nothing(); }
+        if (args->values[0].type != V_STR) { error_at(at, "write argument must be str"); return nothing(); }
+        FileObj *f = receiver.as.file;
+        if (f->closed || !f->fp) { error_at(at, "I/O operation on closed file"); return nothing(); }
+        String *s = args->values[0].as.string;
+        if (fwrite(s->text, 1, s->length, f->fp) != s->length) { error_at(at, "file write error"); return nothing(); }
+        return nothing();
+    }
+    /* file.close() */
+    if (receiver.type == V_FILE && !strcmp(method, "close")) {
+        if (args->count != 0) { error_at(at, "close expects no arguments"); return nothing(); }
+        FileObj *f = receiver.as.file;
+        if (!f->closed && f->fp) { fclose(f->fp); f->fp = NULL; f->closed = 1; }
+        return nothing();
+    }
+    error_at(at, "'%s' object has no method '%s'", type_label(receiver.type), method);
+    return nothing();
+}
+
+static Value call_builtin(Runtime *rt, const char *name, Arguments *args, Location at) {
     if (!strcmp(name, "log") || !strcmp(name, "log.f")) return print_arguments(args, at);
     for (size_t i = 0; i < args->count; i++) if (args->names[i]) {
         error_at(at, "'%s' does not accept named arguments", name); return nothing();
     }
     if (!strcmp(name, "input")) return input_value(args->values, args->count, at);
+    if (!strcmp(name, "range")) {
+        if (args->count < 1 || args->count > 3) { error_at(at, "range expects 1 to 3 int arguments"); return nothing(); }
+        int64_t start = 0, stop = 0, step = 1;
+        for (size_t i = 0; i < args->count; i++) if (args->values[i].type != V_INT) { error_at(at, "range arguments must be int"); return nothing(); }
+        if (args->count == 1) stop = args->values[0].as.integer;
+        else { start = args->values[0].as.integer; stop = args->values[1].as.integer; }
+        if (args->count == 3) step = args->values[2].as.integer;
+        if (!step) { error_at(at, "range step cannot be zero"); return nothing(); }
+        size_t count = 0; for (int64_t i = start; step > 0 ? i < stop : i > stop; ) { count++; if ((step > 0 && i > INT64_MAX - step) || (step < 0 && i < INT64_MIN - step)) break; i += step; }
+        Value *items = resize(NULL, count * sizeof(Value)); int64_t current = start;
+        for (size_t i = 0; i < count; i++) { items[i] = integer_value(current); current += step; }
+        Value result = tuple_value(rt, items, count); free(items); return result;
+    }
+    if (!strcmp(name, "time.now")) {
+        if (args->count != 0) { error_at(at, "time.now expects no arguments"); return nothing(); }
+        return integer_value((int64_t)time(NULL));
+    }
+    /* ── Math builtins ── */
+    if (!strcmp(name, "abs")) {
+        if (args->count != 1) { error_at(at, "abs expects 1 argument"); return nothing(); }
+        Value v = args->values[0];
+        if (v.type == V_INT) return integer_value(v.as.integer < 0 ? (v.as.integer == INT64_MIN ? INT64_MAX : -v.as.integer) : v.as.integer);
+        if (v.type == V_FLOAT) return decimal_value(fabs(v.as.decimal), at);
+        error_at(at, "abs requires int or float"); return nothing();
+    }
+    if (!strcmp(name, "min") || !strcmp(name, "max")) {
+        int is_max = !strcmp(name, "max");
+        if (args->count == 0) { error_at(at, "%s requires at least 1 argument", name); return nothing(); }
+        /* allow min(list) / max(list) with a single list argument */
+        if (args->count == 1 && args->values[0].type == V_LIST) {
+            List *list = args->values[0].as.list;
+            if (list->count == 0) { error_at(at, "%s of empty list", name); return nothing(); }
+            Value best = list->items[0];
+            for (size_t i = 1; i < list->count && !has_error; i++) {
+                Value cmp = compare_values(is_max ? OP_GT : OP_LT, list->items[i], best, at);
+                if (!has_error && cmp.as.boolean) best = list->items[i];
+                release(cmp);
+            }
+            return retain(best);
+        }
+        if (args->count < 2) { error_at(at, "%s requires at least 2 arguments or a list", name); return nothing(); }
+        Value best = args->values[0];
+        for (size_t i = 1; i < args->count && !has_error; i++) {
+            Value cmp = compare_values(is_max ? OP_GT : OP_LT, args->values[i], best, at);
+            if (!has_error && cmp.as.boolean) best = args->values[i];
+            release(cmp);
+        }
+        return retain(best);
+    }
+    if (!strcmp(name, "round")) {
+        if (args->count < 1 || args->count > 2) { error_at(at, "round expects 1 or 2 arguments"); return nothing(); }
+        int64_t places = 0;
+        if (args->count == 2) {
+            if (args->values[1].type != V_INT) { error_at(at, "round's second argument must be int"); return nothing(); }
+            places = args->values[1].as.integer;
+        }
+        Value v = args->values[0];
+        double d;
+        if (v.type == V_INT) d = (double)v.as.integer;
+        else if (v.type == V_FLOAT) d = v.as.decimal;
+        else { error_at(at, "round requires a number"); return nothing(); }
+        double factor = pow(10.0, (double)places);
+        double rounded = round(d * factor) / factor;
+        if (places <= 0 && v.type == V_INT) return integer_value((int64_t)rounded);
+        if (places == 0) return decimal_value(round(d), at);
+        return decimal_value(rounded, at);
+    }
+    /* ── Random builtins ── */
+    if (!strcmp(name, "random.int")) {
+        if (args->count != 2 || args->values[0].type != V_INT || args->values[1].type != V_INT)
+            { error_at(at, "random.int expects two int arguments (min, max)"); return nothing(); }
+        int64_t lo = args->values[0].as.integer, hi = args->values[1].as.integer;
+        if (lo > hi) { error_at(at, "random.int: min must be <= max"); return nothing(); }
+        uint64_t range = (uint64_t)(hi - lo) + 1;
+        int64_t r = lo + (int64_t)((uint64_t)rand() % range);
+        return integer_value(r);
+    }
+    if (!strcmp(name, "random.float")) {
+        if (args->count != 0) { error_at(at, "random.float expects no arguments"); return nothing(); }
+        return decimal_value((double)rand() / ((double)RAND_MAX + 1.0), at);
+    }
+    if (!strcmp(name, "random.choice")) {
+        if (args->count != 1 || args->values[0].type != V_LIST)
+            { error_at(at, "random.choice expects a list argument"); return nothing(); }
+        List *list = args->values[0].as.list;
+        if (list->count == 0) { error_at(at, "random.choice from empty list"); return nothing(); }
+        size_t i = (size_t)rand() % list->count;
+        return retain(list->items[i]);
+    }
+    /* ── File I/O ── */
+    if (!strcmp(name, "open")) {
+        if (args->count != 2 || args->values[0].type != V_STR || args->values[1].type != V_STR)
+            { error_at(at, "open expects two str arguments (path, mode)"); return nothing(); }
+        const char *path = args->values[0].as.string->text;
+        const char *mode = args->values[1].as.string->text;
+        /* validate mode */
+        if (strcmp(mode, "r") && strcmp(mode, "w") && strcmp(mode, "a") &&
+            strcmp(mode, "rb") && strcmp(mode, "wb") && strcmp(mode, "ab"))
+            { error_at(at, "open mode must be 'r', 'w', or 'a'"); return nothing(); }
+#ifdef _WIN32
+        /* Use wide-char path on Windows so Unicode file names work */
+        int wlen = MultiByteToWideChar(CP_UTF8, 0, path, -1, NULL, 0);
+        wchar_t *wpath = resize(NULL, (size_t)wlen * sizeof(wchar_t));
+        MultiByteToWideChar(CP_UTF8, 0, path, -1, wpath, wlen);
+        int wmlen = MultiByteToWideChar(CP_UTF8, 0, mode, -1, NULL, 0);
+        wchar_t *wmode = resize(NULL, (size_t)wmlen * sizeof(wchar_t));
+        MultiByteToWideChar(CP_UTF8, 0, mode, -1, wmode, wmlen);
+        FILE *fp = _wfopen(wpath, wmode);
+        free(wpath); free(wmode);
+#else
+        FILE *fp = fopen(path, mode);
+#endif
+        if (!fp) {
+            error_at(at, "cannot open file '%s': %s", path, strerror(errno));
+            return nothing();
+        }
+        FileObj *f = new_object(rt, sizeof(*f), G_FILE);
+        f->fp = fp; f->closed = 0;
+        Value result = {.type = V_FILE}; result.as.file = f; return result;
+    }
     if (args->count != 1) { error_at(at, "wrong number of arguments to '%s' (expected 1)", name); return nothing(); }
     if (!strcmp(name, "len")) {
         Value value = args->values[0];
         if (value.type == V_TUPLE) return integer_value((int64_t)value.as.tuple->count);
+        if (value.type == V_LIST) return integer_value((int64_t)value.as.list->count);
+        if (value.type == V_DICT) return integer_value((int64_t)value.as.dict->count);
         if (value.type == V_STR) return integer_value((int64_t)character_count(value.as.string->text, value.as.string->length));
         error_at(at, "len requires variadic arguments or str"); return nothing();
     }
@@ -74,7 +331,7 @@ static Value create_function(Runtime *rt, Env *env, Statement *s) {
     Value result = {.type = V_FUNCTION}; result.as.function = fn; return result;
 }
 static Value invoke_function(Runtime *rt, Closure *fn, Arguments *args, Location at) {
-    if (fn->builtin) return call_builtin(fn->builtin, args, at);
+    if (fn->builtin) return call_builtin(rt, fn->builtin, args, at);
     Statement *definition = fn->definition;
     size_t count = definition->parameter_count, fixed = count;
     NameList **params = resize(NULL, count * sizeof(NameList *));
@@ -140,6 +397,24 @@ static Value dynamic_format(Runtime *rt, Env *env, Value value, Location at) {
     return result;
 }
 static Value call_function(Runtime *rt, Env *env, Expr *expr) {
+    /* ── Method call: receiver.method(args) ── */
+    if (expr->left->kind == E_MEMBER) {
+        Value receiver = evaluate(rt, env, expr->left->left);
+        Arguments args = {0};
+        for (ExprList *item = expr->args; item && !has_error; item = item->next) {
+            Value value = evaluate(rt, env, item->value);
+            if (!has_error) {
+                if (!item->spread) add_argument(&args, value, item->name, item->value->at);
+                else if (value.type != V_TUPLE) error_at(item->value->at, "#expansion requires variadic arguments");
+                else for (size_t i = 0; i < value.as.tuple->count && !has_error; i++)
+                    add_argument(&args, value.as.tuple->items[i], NULL, item->value->at);
+            }
+            release(value);
+        }
+        Value result = has_error ? nothing() : call_method(rt, receiver, expr->left->text, &args, expr->at);
+        release(receiver); free_arguments(&args);
+        return result;
+    }
     Value callable = evaluate(rt, env, expr->left);
     if (!has_error && callable.type != V_FUNCTION) error_at(expr->at, "%s value is not callable", type_label(callable.type));
     Arguments args = {0};

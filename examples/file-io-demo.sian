@@ -1,0 +1,30 @@
+|| SianLang 0.4.1 - 파일 I/O 예제 (File I/O Demo)
+
+|| 1. 파일 쓰기 ("w")
+try
+    var f_write = open("_demo_file.txt", "w")
+    f_write.write("안녕하세요 SianLang 0.4.1 입니다!\n")
+    f_write.write("파일 읽기와 쓰기가 정상 동작합니다.\n")
+    f_write.close()
+    log "파일 쓰기 성공"
+catch err
+    log.f("파일 쓰기 실패: {err}")
+
+|| 2. 파일 이어쓰기 ("a")
+try
+    var f_app = open("_demo_file.txt", "a")
+    f_app.write("추가된 줄입니다.\n")
+    f_app.close()
+    log "파일 이어쓰기 성공"
+catch err
+    log.f("이어쓰기 실패: {err}")
+
+|| 3. 파일 읽기 ("r")
+try
+    var f_read = open("_demo_file.txt", "r")
+    str content = f_read.read()
+    f_read.close()
+    log "\n--- [ 파일 내용 ] ---"
+    log content
+catch err
+    log.f("파일 읽기 실패: {err}")

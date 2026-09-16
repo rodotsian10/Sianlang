@@ -2,21 +2,28 @@
 #define SIAN_VALUES_H
 
 typedef struct { size_t refs, length; char text[]; } String;
-typedef enum { G_ENV, G_FUNCTION, G_TUPLE } ObjectKind;
+typedef enum { G_ENV, G_FUNCTION, G_TUPLE, G_LIST, G_DICT, G_FILE } ObjectKind;
 typedef struct Object { ObjectKind kind; size_t refs, trial; int marked; struct Object *next; } Object;
 typedef struct Env Env;
 typedef struct Closure Closure;
 typedef struct Tuple Tuple;
+typedef struct List List;
+typedef struct Dict Dict;
+typedef struct FileObj FileObj;
 typedef struct {
     ValueType type;
     union { int64_t integer; double decimal; String *string; int boolean;
-        Closure *function; Tuple *tuple; } as;
+        Closure *function; Tuple *tuple; List *list; Dict *dict; FileObj *file; } as;
 } Value;
+struct FileObj { Object object; FILE *fp; int closed; };
 typedef struct { const char *name; ValueType type; Value value; } Variable;
 struct Env { Object object; Variable *vars; size_t count, capacity; Env *parent; };
 struct Closure { Object object; Statement *definition; Env *environment; Value *defaults;
     const char *builtin; Value receiver; };
 struct Tuple { Object object; size_t count; Value *items; };
+struct List { Object object; size_t count, capacity; Value *items; };
+typedef struct { Value key, value; } DictEntry;
+struct Dict { Object object; size_t count, capacity; DictEntry *items; };
 typedef enum { FLOW_NORMAL, FLOW_RETURN, FLOW_BREAK, FLOW_CONTINUE, FLOW_ERROR } FlowKind;
 typedef struct { FlowKind kind; Value value; } Flow;
 typedef struct {
@@ -45,6 +52,9 @@ static Value text_value(const char *text, size_t length, Location at) {
 static Object *value_object(Value v) {
     if (v.type == V_FUNCTION) return &v.as.function->object;
     if (v.type == V_TUPLE) return &v.as.tuple->object;
+    if (v.type == V_LIST) return &v.as.list->object;
+    if (v.type == V_DICT) return &v.as.dict->object;
+    if (v.type == V_FILE) return &v.as.file->object;
     return NULL;
 }
 static Value retain(Value v) {
@@ -73,8 +83,20 @@ static Value tuple_value(Runtime *rt, Value *values, size_t count) {
     for (size_t i = 0; i < count; i++) tuple->items[i] = retain(values[i]);
     Value value = {.type = V_TUPLE}; value.as.tuple = tuple; return value;
 }
+static Value list_value(Runtime *rt, Value *values, size_t count) {
+    List *list = new_object(rt, sizeof(*list), G_LIST);
+    list->count = count; list->capacity = count; list->items = resize(NULL, count * sizeof(Value));
+    for (size_t i = 0; i < count; i++) list->items[i] = retain(values[i]);
+    Value value = {.type = V_LIST}; value.as.list = list; return value;
+}
+static Value dict_value(Runtime *rt, Value *keys, Value *values, size_t count) {
+    Dict *dict = new_object(rt, sizeof(*dict), G_DICT);
+    dict->count = count; dict->capacity = count; dict->items = resize(NULL, count * sizeof(DictEntry));
+    for (size_t i = 0; i < count; i++) { dict->items[i].key = retain(keys[i]); dict->items[i].value = retain(values[i]); }
+    Value value = {.type = V_DICT}; value.as.dict = dict; return value;
+}
 static const char *type_label(ValueType type) {
-    static const char *labels[] = {"None", "int", "float", "str", "bool", "function", "tuple", "var"};
+    static const char *labels[] = {"None", "int", "float", "str", "bool", "function", "tuple", "list", "dict", "var"};
     return labels[type];
 }
 static int numeric(Value v) { return v.type == V_INT || v.type == V_FLOAT; }
@@ -88,6 +110,8 @@ static int truth_value(Value v, Location at) {
         case V_BOOL: return v.as.boolean;
         case V_VOID: return 0;
         case V_TUPLE: return v.as.tuple->count != 0;
+        case V_LIST: return v.as.list->count != 0;
+        case V_DICT: return v.as.dict->count != 0;
         default: return 1;
     }
 }
@@ -130,6 +154,15 @@ static void object_edges(Object *o, VisitObject visit, void *context) {
     } else if (o->kind == G_TUPLE) {
         Tuple *tuple = (Tuple *)o;
         for (size_t i = 0; i < tuple->count; i++) visit_value(tuple->items[i], visit, context);
+    } else if (o->kind == G_LIST) {
+        List *list = (List *)o;
+        for (size_t i = 0; i < list->count; i++) visit_value(list->items[i], visit, context);
+    } else if (o->kind == G_DICT) {
+        Dict *dict = (Dict *)o;
+        for (size_t i = 0; i < dict->count; i++) {
+            visit_value(dict->items[i].key, visit, context);
+            visit_value(dict->items[i].value, visit, context);
+        }
     }
 }
 static void subtract_edge(Object *o, void *context) { (void)context; o->trial--; }
@@ -168,6 +201,20 @@ static void collect(Runtime *rt, int force) {
             Tuple *tuple = (Tuple *)o;
             for (size_t i = 0; i < tuple->count; i++) release_string(tuple->items[i]);
             free(tuple->items);
+        } else if (o->kind == G_LIST) {
+            List *list = (List *)o;
+            for (size_t i = 0; i < list->count; i++) release_string(list->items[i]);
+            free(list->items);
+        } else if (o->kind == G_DICT) {
+            Dict *dict = (Dict *)o;
+            for (size_t i = 0; i < dict->count; i++) {
+                release_string(dict->items[i].key);
+                release_string(dict->items[i].value);
+            }
+            free(dict->items);
+        } else if (o->kind == G_FILE) {
+            FileObj *f = (FileObj *)o;
+            if (f->fp && !f->closed) { fclose(f->fp); f->closed = 1; }
         }
         free(o); rt->object_count--;
     }

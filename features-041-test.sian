@@ -1,0 +1,80 @@
+|| 0.4.1 기능 통합 테스트
+
+|| 1. 인덱스 대입
+var items = [10, 20, 30]
+items[0] = 99
+log items
+
+|| 2. 음수 인덱스 대입
+items[-1] = 77
+log items
+
+|| 3. dict 키 업데이트 / 신규 추가
+var user = {"name": "Sian", "score": 100}
+user["score"] = 200
+user["level"] = 5
+log user
+
+|| 4. list.append / pop
+var inv = ["검"]
+inv.append("방패")
+inv.append("포션")
+log inv
+var last = inv.pop()
+log last
+log inv
+
+|| 5. dict.keys / values / items
+var d = {"a": 1, "b": 2}
+log d.keys()
+log d.values()
+for pair in d.items()
+    log pair
+
+|| 6. 문자열 인덱싱 (한글 UTF-8)
+str name = "시안랭"
+log name[0]
+log name[1]
+log name[-1]
+
+|| 7. 문자열 for 순회
+for ch in "abc"
+    log ch
+for ch in "시안"
+    log ch
+
+|| 8. abs / min / max / round
+log abs(-42)
+log abs(3.14)
+log min(5, 3, 8)
+log max(5, 3, 8)
+log round(3.14159, 2)
+log round(2.5)
+
+|| 9. random
+int dice = random.int(1, 6)
+log dice >= 1 and dice <= 6
+float r = random.float()
+log r >= 0.0 and r < 1.0
+var pool = ["사과", "바나나", "포도"]
+var picked = random.choice(pool)
+log picked
+
+|| 10. 파일 I/O
+var file1 = open("_test_output.txt", "w")
+file1.write("안녕 시안랭\n")
+file1.write("line 2\n")
+file1.close()
+
+var file2 = open("_test_output.txt", "r")
+str content = file2.read()
+file2.close()
+log content
+
+|| 11. 파일 없음 - try/catch
+try
+    var bad = open("없는파일.txt", "r")
+catch err
+    log.f("파일 에러 포착: {err}")
+
+log "테스트 완료"

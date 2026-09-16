@@ -1,6 +1,6 @@
-log "before"
 try
-    log 1 / 0
+    int value = input("Enter a number: ")
+    log value
 catch error
-    log "caught"
-log "after"
+    log "Input failed safely."
+log "finished"

@@ -76,6 +76,22 @@ static void render_value(TextBuffer *b, Value value, int repr, unsigned int dept
             }
             if (value.as.tuple->count == 1) append_cstr(b, ",");
             append_cstr(b, ")"); break;
+        case V_LIST:
+            append_cstr(b, "[");
+            for (size_t i = 0; i < value.as.list->count; i++) {
+                if (i) append_cstr(b, ", ");
+                render_value(b, value.as.list->items[i], 1, depth + 1);
+            }
+            append_cstr(b, "]"); break;
+        case V_DICT:
+            append_cstr(b, "{");
+            for (size_t i = 0; i < value.as.dict->count; i++) {
+                if (i) append_cstr(b, ", ");
+                render_value(b, value.as.dict->items[i].key, 1, depth + 1);
+                append_cstr(b, ": ");
+                render_value(b, value.as.dict->items[i].value, 1, depth + 1);
+            }
+            append_cstr(b, "}"); break;
         default: error_at(b->at, "cannot display this value"); break;
     }
 }

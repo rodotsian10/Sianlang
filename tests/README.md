@@ -14,6 +14,7 @@ GCC로 경고를 오류로 취급해 빌드하고, Python 실행기 테스트와
 python tests/test_runtime.py
 python tests/test_runtime.py --exe build/Sianlang.exe
 python tests/test_v03.py --exe build/Sianlang.exe
+python tests/test_v04.py --exe build/Sianlang.exe
 node tests/test_extension.js
 ```
 
@@ -26,6 +27,7 @@ node tests/test_extension.js
 - 긴 입력, UTF-8 문자열과 BOM, 한글/이모지/셸 특수문자 파일명, 길이·호출·문법 깊이 한도를 검증합니다.
 - 함수/문자열 20,000회 반복 및 오류 반환 경로를 검증합니다. 실행기는 종료 시 살아 있는 런타임 문자열 수가 0인지 검사합니다.
 - 0.3 테스트는 콘솔 log의 Python 비교(실수 500개 포함), log.f, 기본값/이름 지정 인수/#묶음, 클로저, None, try/catch, 반복문의 else를 검증합니다. 순환 환경/함수 객체도 종료 시 0개인지 검사합니다.
+- 0.4 테스트는 list/tuple/dict 리터럴, 인덱싱, len, for, range 세 가지 형식, range 오류, dict key 순회, time.now를 검증합니다.
 - 임시 입력은 `tests` 아래에 만들고 정리합니다. 각 프로세스는 5초 제한을 둡니다.
 
 ## 확장

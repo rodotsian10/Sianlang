@@ -594,8 +594,15 @@ static Flow execute_inner(Runtime *runtime, Env *env, Statement *statement) {
                     if (out) {
                         stringify_json(out, j_var->value, 0);
                         fclose(out);
-                        remove(path);
-                        rename(temp_path, path);
+                        /* Windows rename() does not replace an existing file. */
+                        if (remove(path) != 0 && errno != ENOENT) {
+                            remove(temp_path);
+                            error_at(s->at, "failed to replace Fjson file: %s", strerror(errno));
+                        }
+                        if (!has_error && rename(temp_path, path) != 0) {
+                            remove(temp_path);
+                            error_at(s->at, "failed to replace Fjson file: %s", strerror(errno));
+                        }
                     } else {
                         error_at(s->at, "failed to save Fjson file");
                     }

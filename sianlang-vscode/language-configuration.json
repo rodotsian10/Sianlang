@@ -6,6 +6,7 @@
   "brackets": [
     ["[", "]"],
     ["(", ")"]
+    , ["{", "}"]
   ],
   "autoClosingPairs": [
     ["[", "]"],
@@ -18,12 +19,12 @@
     ["\"", "\""]
   ],
   "indentationRules": {
-    "increaseIndentPattern": "^\\s*(if|else|try|catch|repeat|while|loop|def|func|f|function)\\b.*$",
+    "increaseIndentPattern": "^\\s*(if|else|try|catch|repeat|while|loop|def|func|f|function|Fjson)\\b.*$",
     "decreaseIndentPattern": "^\\s*(else|catch)\\b.*$"
   },
   "onEnterRules": [
     {
-      "beforeText": "^\\s*(if|else|try|catch|repeat|while|loop|def|func|f|function)\\b.*$",
+      "beforeText": "^\\s*(if|else|try|catch|repeat|while|loop|def|func|f|function|Fjson)\\b.*$",
       "action": {
         "indent": "indent"
       }

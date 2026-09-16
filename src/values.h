@@ -96,7 +96,7 @@ static Value dict_value(Runtime *rt, Value *keys, Value *values, size_t count) {
     Value value = {.type = V_DICT}; value.as.dict = dict; return value;
 }
 static const char *type_label(ValueType type) {
-    static const char *labels[] = {"None", "int", "float", "str", "bool", "function", "tuple", "list", "dict", "var"};
+    static const char *labels[] = {"None", "int", "float", "str", "bool", "function", "tuple", "list", "dict", "var", "file"};
     return labels[type];
 }
 static int numeric(Value v) { return v.type == V_INT || v.type == V_FLOAT; }

@@ -230,7 +230,7 @@ class RuntimeTests(unittest.TestCase):
 
     def test_command_line(self):
         global EXECUTIONS
-        for args, code, fragment in [([], 1, 'Usage:'), (['--version'], 0, '0.4.2'),
+        for args, code, fragment in [([], 1, 'Usage:'), (['--version'], 0, '0.4.3'),
                                       (['missing.sian'], 1, 'cannot open'), (['file.txt'], 1, '.sian')]:
             with self.subTest(args=args):
                 EXECUTIONS += 1

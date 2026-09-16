@@ -331,7 +331,10 @@ static Value call_builtin(Runtime *rt, const char *name, Arguments *args, Locati
     if (!strcmp(name, "abs")) {
         if (args->count != 1) { error_at(at, "abs expects 1 argument"); return nothing(); }
         Value v = args->values[0];
-        if (v.type == V_INT) return integer_value(v.as.integer < 0 ? (v.as.integer == INT64_MIN ? INT64_MAX : -v.as.integer) : v.as.integer);
+        if (v.type == V_INT) {
+            if (v.as.integer == INT64_MIN) { error_at(at, "abs result is outside int range"); return nothing(); }
+            return integer_value(v.as.integer < 0 ? -v.as.integer : v.as.integer);
+        }
         if (v.type == V_FLOAT) return decimal_value(fabs(v.as.decimal), at);
         error_at(at, "abs requires int or float"); return nothing();
     }
@@ -383,8 +386,9 @@ static Value call_builtin(Runtime *rt, const char *name, Arguments *args, Locati
             { error_at(at, "random.int expects two int arguments (min, max)"); return nothing(); }
         int64_t lo = args->values[0].as.integer, hi = args->values[1].as.integer;
         if (lo > hi) { error_at(at, "random.int: min must be <= max"); return nothing(); }
-        uint64_t range = (uint64_t)(hi - lo) + 1;
-        int64_t r = lo + (int64_t)((uint64_t)rand() % range);
+        uint64_t range = (uint64_t)hi - (uint64_t)lo + 1;
+        uint64_t offset = (uint64_t)rand() % range;
+        int64_t r = (int64_t)((uint64_t)lo + offset);
         return integer_value(r);
     }
     if (!strcmp(name, "random.float")) {

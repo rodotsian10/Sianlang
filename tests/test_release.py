@@ -45,7 +45,7 @@ with tempfile.TemporaryDirectory(prefix='배포 확인 & ', dir=ROOT / 'build') 
         packed = json.loads(extension.read('extension/package.json'))
         assert packed['contributes']['languages'][0]['icon']['dark'] == './icons/sianlang-file.svg'
         snippets = json.loads(extension.read('extension/snippets/sianlang.json'))
-        assert len(snippets) == 9
+        assert len(snippets) == 12
         assert extension.read('extension/LICENSE') == (ROOT / 'LICENSE').read_bytes()
     assert (portable / 'LICENSE').read_bytes() == (ROOT / 'LICENSE').read_bytes()
 print('Release checks passed: SHA256, download links, clean-PATH portable execution, bundled runtime and icon.')

@@ -25,7 +25,7 @@ try {
         & py tests/test_release.py
         if ($LASTEXITCODE -ne 0) { throw 'Release verification failed' }
     }
-    Write-Output 'Built SianLang 0.4.2 (Sianlang.exe and compatibility copy SianlangA.exe)'
+    Write-Output 'Built SianLang 0.4.3 (Sianlang.exe and compatibility copy SianlangA.exe)'
 } finally {
     Pop-Location
 }

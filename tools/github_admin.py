@@ -42,7 +42,7 @@ if mode == 'status':
     print(json.dumps({key: repo.get(key) for key in ['full_name', 'private', 'default_branch', 'permissions', 'size', 'has_pages']}, indent=2))
 elif mode == 'publish':
     version = json.loads((ROOT / 'sianlang-vscode/package.json').read_text(encoding='utf-8'))['version']
-    commit = subprocess.check_output(['git', '-c', f'safe.directory={ROOT / "build/github-release"}', '-C', str(ROOT / 'build/github-release'), 'rev-parse', 'HEAD'], text=True).strip()
+    commit = subprocess.check_output(['git', '-C', str(ROOT), 'rev-parse', 'HEAD'], text=True).strip()
     releases = request('GET', '/releases')
     if any(r['tag_name'] == f'v{version}' for r in releases):
         raise SystemExit('Release already exists; refusing to overwrite it.')

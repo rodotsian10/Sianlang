@@ -179,6 +179,127 @@ static Value call_method(Runtime *rt, Value receiver, const char *method, Argume
         if (!f->closed && f->fp) { fclose(f->fp); f->fp = NULL; f->closed = 1; }
         return nothing();
     }
+    /* str.split([sep]) */
+    if (receiver.type == V_STR && !strcmp(method, "split")) {
+        if (args->count > 1 || (args->count == 1 && args->names[0])) { error_at(at, "split expects 0 or 1 positional argument"); return nothing(); }
+        const char *text = receiver.as.string->text;
+        size_t len = receiver.as.string->length;
+        if (args->count == 1) {
+            if (args->values[0].type != V_STR) { error_at(at, "split separator must be str"); return nothing(); }
+            const char *sep = args->values[0].as.string->text;
+            size_t sep_len = args->values[0].as.string->length;
+            if (sep_len == 0) { error_at(at, "empty separator"); return nothing(); }
+            size_t count = 0, capacity = 8;
+            Value *items = malloc(capacity * sizeof(Value));
+            const char *scan = text;
+            while (scan < text + len) {
+                const char *match = strstr(scan, sep);
+                if (!match) match = text + len;
+                if (count == capacity) { capacity *= 2; items = realloc(items, capacity * sizeof(Value)); }
+                items[count++] = text_value(scan, (size_t)(match - scan), at);
+                scan = match + sep_len;
+            }
+            if (scan == text + len && (len >= sep_len && memcmp(text + len - sep_len, sep, sep_len) == 0)) {
+                if (count == capacity) { capacity *= 2; items = realloc(items, capacity * sizeof(Value)); }
+                items[count++] = text_value("", 0, at);
+            }
+            Value res = list_value(rt, items, count);
+            for(size_t i=0; i<count; i++) release(items[i]);
+            free(items); return res;
+        } else {
+            size_t count = 0, capacity = 8;
+            Value *items = malloc(capacity * sizeof(Value));
+            const char *scan = text;
+            while (scan < text + len) {
+                while (scan < text + len && (*scan == ' ' || *scan == '\t' || *scan == '\n' || *scan == '\r')) scan++;
+                if (scan == text + len) break;
+                const char *start = scan;
+                while (scan < text + len && !(*scan == ' ' || *scan == '\t' || *scan == '\n' || *scan == '\r')) scan++;
+                if (count == capacity) { capacity *= 2; items = realloc(items, capacity * sizeof(Value)); }
+                items[count++] = text_value(start, (size_t)(scan - start), at);
+            }
+            Value res = list_value(rt, items, count);
+            for(size_t i=0; i<count; i++) release(items[i]);
+            free(items); return res;
+        }
+    }
+    /* str.join(list) */
+    if (receiver.type == V_STR && !strcmp(method, "join")) {
+        if (args->count != 1 || args->values[0].type != V_LIST) { error_at(at, "join expects 1 list argument"); return nothing(); }
+        List *list = args->values[0].as.list;
+        const char *sep = receiver.as.string->text;
+        size_t sep_len = receiver.as.string->length;
+        size_t total = 0;
+        for (size_t i = 0; i < list->count; i++) {
+            if (list->items[i].type != V_STR) { error_at(at, "join expects a list of str"); return nothing(); }
+            total += list->items[i].as.string->length;
+            if (i < list->count - 1) total += sep_len;
+        }
+        if (total > TEXT_LIMIT) { error_at(at, "string exceeds limit"); return nothing(); }
+        char *buf = malloc(total + 1);
+        size_t out = 0;
+        for (size_t i = 0; i < list->count; i++) {
+            size_t len = list->items[i].as.string->length;
+            memcpy(buf + out, list->items[i].as.string->text, len);
+            out += len;
+            if (i < list->count - 1 && sep_len > 0) {
+                memcpy(buf + out, sep, sep_len);
+                out += sep_len;
+            }
+        }
+        buf[out] = '\0';
+        Value res = text_value(buf, total, at);
+        free(buf); return res;
+    }
+    /* str.trim() */
+    if (receiver.type == V_STR && !strcmp(method, "trim")) {
+        if (args->count != 0) { error_at(at, "trim expects no arguments"); return nothing(); }
+        const char *start = receiver.as.string->text;
+        const char *end = start + receiver.as.string->length;
+        while (start < end && (*start == ' ' || *start == '\t' || *start == '\n' || *start == '\r')) start++;
+        while (end > start && (*(end - 1) == ' ' || *(end - 1) == '\t' || *(end - 1) == '\n' || *(end - 1) == '\r')) end--;
+        return text_value(start, (size_t)(end - start), at);
+    }
+    /* str.contains(str) */
+    if (receiver.type == V_STR && !strcmp(method, "contains")) {
+        if (args->count != 1 || args->values[0].type != V_STR) { error_at(at, "contains expects 1 str argument"); return nothing(); }
+        const char *text = receiver.as.string->text;
+        const char *sub = args->values[0].as.string->text;
+        return boolean_value(strstr(text, sub) != NULL);
+    }
+    /* str.replace(old, new) */
+    if (receiver.type == V_STR && !strcmp(method, "replace")) {
+        if (args->count != 2 || args->values[0].type != V_STR || args->values[1].type != V_STR) { error_at(at, "replace expects 2 str arguments (old, new)"); return nothing(); }
+        const char *text = receiver.as.string->text;
+        const char *old = args->values[0].as.string->text;
+        const char *new_str = args->values[1].as.string->text;
+        size_t old_len = args->values[0].as.string->length;
+        size_t new_len = args->values[1].as.string->length;
+        if (old_len == 0) { error_at(at, "empty target string"); return nothing(); }
+        
+        size_t occurrences = 0;
+        const char *scan = text;
+        while ((scan = strstr(scan, old)) != NULL) { occurrences++; scan += old_len; }
+        
+        size_t final_len = receiver.as.string->length + occurrences * (new_len - old_len);
+        if (final_len > TEXT_LIMIT) { error_at(at, "string exceeds limit"); return nothing(); }
+        
+        char *buf = malloc(final_len + 1);
+        size_t out = 0;
+        scan = text;
+        const char *match;
+        while ((match = strstr(scan, old)) != NULL) {
+            size_t copy_len = (size_t)(match - scan);
+            memcpy(buf + out, scan, copy_len); out += copy_len;
+            memcpy(buf + out, new_str, new_len); out += new_len;
+            scan = match + old_len;
+        }
+        size_t rem = (size_t)((text + receiver.as.string->length) - scan);
+        memcpy(buf + out, scan, rem); out += rem;
+        buf[out] = '\0';
+        Value res = text_value(buf, final_len, at);
+        free(buf); return res;
+    }
     error_at(at, "'%s' object has no method '%s'", type_label(receiver.type), method);
     return nothing();
 }

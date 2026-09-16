@@ -217,8 +217,25 @@ static Value evaluate_inner(Runtime *runtime, Env *env, Expr *expr) {
             for (size_t i = 0; i < count; i++) { release(keys[i]); release(values[i]); }
             free(keys); free(values); return result;
         }
-        case E_MEMBER:
-            error_at(expr->at, "member access is not supported here"); return nothing();
+        case E_MEMBER: {
+            Value obj = evaluate(runtime, env, expr->left);
+            if (has_error) return nothing();
+            Value res = nothing();
+            if (obj.type == V_DICT) {
+                int found = 0;
+                for (size_t i = 0; i < obj.as.dict->count; i++) {
+                    if (obj.as.dict->items[i].key.type == V_STR && !strcmp(obj.as.dict->items[i].key.as.string->text, expr->text)) {
+                        res = retain(obj.as.dict->items[i].value);
+                        found = 1; break;
+                    }
+                }
+                if (!found) error_at(expr->at, "dictionary key '%s' not found", expr->text);
+            } else {
+                error_at(expr->at, "member access requires a dictionary");
+            }
+            release(obj);
+            return res;
+        }
         case E_INDEX: {
             Value value = evaluate(runtime, env, expr->left);
             Value index = has_error ? nothing() : evaluate(runtime, env, expr->right);
@@ -316,6 +333,107 @@ static Value assignment_value(Value v, ValueType target, Expr *expr, const char 
     error_at(expr->at, "variable '%s' expects %s, got %s", name, type_label(target), type_label(v.type));
     return nothing();
 }
+
+/* Get the value at an expr path without raising an error on missing keys.
+   Returns nothing() (V_VOID) if the path doesn't exist. */
+static Value get_value_soft(Env *env, Expr *expr) {
+    if (expr->kind == E_NAME) {
+        Variable *v = find_variable(env, expr->text);
+        return v ? retain(v->value) : nothing();
+    }
+    if (expr->kind == E_MEMBER) {
+        Value parent = get_value_soft(env, expr->left);
+        if (parent.type != V_DICT) { release(parent); return nothing(); }
+        Value res = nothing();
+        for (size_t i = 0; i < parent.as.dict->count; i++) {
+            if (parent.as.dict->items[i].key.type == V_STR &&
+                !strcmp(parent.as.dict->items[i].key.as.string->text, expr->text)) {
+                res = retain(parent.as.dict->items[i].value); break;
+            }
+        }
+        release(parent); return res;
+    }
+    return nothing();
+}
+
+static void set_member_value(Runtime *rt, Env *env, Expr *expr, Value val, Location at) {
+    if (expr->kind == E_NAME) {
+        Variable *v = find_variable(env, expr->text);
+        if (v) { release(v->value); v->value = retain(val); }
+        else error_at(at, "variable '%s' not found", expr->text);
+    } else if (expr->kind == E_MEMBER) {
+        /* Use soft-get so missing intermediate dicts don't error */
+        Value obj = get_value_soft(env, expr->left);
+        if (obj.type != V_DICT) {
+            release(obj);
+            /* Parent doesn't exist or isn't a dict — create a new empty dict and assign it */
+            Value new_dict = dict_value(rt, NULL, NULL, 0);
+            set_member_value(rt, env, expr->left, new_dict, at);
+            release(new_dict);
+            if (has_error) return;
+            obj = get_value_soft(env, expr->left);
+        }
+        if (obj.type == V_DICT) {
+            Dict *dict = obj.as.dict;
+            int found = 0;
+            for (size_t i = 0; i < dict->count; i++) {
+                if (dict->items[i].key.type == V_STR && !strcmp(dict->items[i].key.as.string->text, expr->text)) {
+                    release(dict->items[i].value);
+                    dict->items[i].value = retain(val);
+                    found = 1; break;
+                }
+            }
+            if (!found) {
+                if (dict->count == dict->capacity) {
+                    dict->capacity = dict->capacity ? dict->capacity * 2 : 8;
+                    dict->items = resize(dict->items, dict->capacity * sizeof(DictEntry));
+                }
+                dict->items[dict->count].key = text_value(expr->text, strlen(expr->text), at);
+                dict->items[dict->count].value = retain(val);
+                dict->count++;
+            }
+        } else {
+            error_at(at, "member assignment requires a dictionary");
+        }
+        release(obj);
+    } else if (expr->kind == E_INDEX) {
+        Value obj = evaluate(rt, env, expr->left);
+        Value key = has_error ? nothing() : evaluate(rt, env, expr->right);
+        if (has_error) { release(obj); release(key); return; }
+        if (obj.type == V_LIST) {
+            if (key.type != V_INT) error_at(at, "list index must be int");
+            else {
+                int64_t idx = key.as.integer;
+                if (idx < 0) idx += (int64_t)obj.as.list->count;
+                if (idx < 0 || idx >= (int64_t)obj.as.list->count) error_at(at, "list index out of range");
+                else { release(obj.as.list->items[idx]); obj.as.list->items[idx] = retain(val); }
+            }
+        } else if (obj.type == V_DICT) {
+            Dict *dict = obj.as.dict;
+            int found = 0;
+            for (size_t i = 0; i < dict->count; i++) {
+                Value eq = compare_values(OP_EQ, dict->items[i].key, key, at);
+                if (!has_error && eq.as.boolean) {
+                    release(dict->items[i].value); dict->items[i].value = retain(val); found = 1;
+                }
+                release(eq); if (found || has_error) break;
+            }
+            if (!found && !has_error) {
+                if (dict->count == dict->capacity) {
+                    dict->capacity = dict->capacity ? dict->capacity * 2 : 8;
+                    dict->items = resize(dict->items, dict->capacity * sizeof(DictEntry));
+                }
+                dict->items[dict->count].key = retain(key); dict->items[dict->count].value = retain(val); dict->count++;
+            }
+        } else {
+            error_at(at, "index assignment requires list or dict");
+        }
+        release(obj); release(key);
+    } else {
+        error_at(at, "invalid assignment target");
+    }
+}
+
 static Flow execute_inner(Runtime *runtime, Env *env, Statement *statement) {
     for (Statement *s = statement; s && !has_error; s = s->next) {
         collect(runtime, 0);
@@ -440,57 +558,149 @@ static Flow execute_inner(Runtime *runtime, Env *env, Statement *statement) {
             }
             continue;
         }
-        /* ── Index assignment: collection[key] = value ── */
-        if (s->kind == S_INDEX_ASSIGN) {
-            if (s->expr->kind != E_INDEX) { error_at(s->at, "invalid index assignment target"); break; }
-            Value container = evaluate(runtime, env, s->expr->left);
-            Value key = has_error ? nothing() : evaluate(runtime, env, s->expr->right);
-            Value val = has_error ? nothing() : evaluate(runtime, env, s->expr2);
-            if (!has_error) {
-                if (container.type == V_LIST) {
-                    if (key.type != V_INT) error_at(s->at, "list index must be int");
-                    else {
-                        int64_t idx = key.as.integer;
-                        int64_t len = (int64_t)container.as.list->count;
-                        if (idx < 0) idx += len;
-                        if (idx < 0 || idx >= len) error_at(s->at, "list index out of range");
-                        else {
-                            release(container.as.list->items[idx]);
-                            container.as.list->items[idx] = retain(val);
-                        }
+        /* ── Fjson blocks ── */
+        if (s->kind == S_FJSON) {
+            Value filename = evaluate(runtime, env, s->expr);
+            if (has_error || filename.type != V_STR) { error_at(s->at, "Fjson filename must be str"); release(filename); break; }
+            const char *path = filename.as.string->text;
+            FILE *fp = fopen(path, "rb");
+            Value j_val;
+            if (fp) {
+                fseek(fp, 0, SEEK_END);
+                long len = ftell(fp);
+                fseek(fp, 0, SEEK_SET);
+                size_t flen = (len > 0) ? (size_t)len : 0;
+                char *buf = malloc(flen + 1);
+                fread(buf, 1, flen, fp);
+                buf[flen] = '\0';
+                fclose(fp);
+                const char *p = buf;
+                j_val = parse_json_val(runtime, &p);
+                free(buf);
+                if (j_val.type == V_VOID) j_val = dict_value(runtime, NULL, NULL, 0);
+            } else {
+                j_val = dict_value(runtime, NULL, NULL, 0);
+            }
+            Env *local = new_env(runtime, env);
+            define_variable(local, "j", V_ANY, j_val);
+            release(j_val);
+            Flow flow = execute(runtime, local, s->body);
+            if (flow.kind != FLOW_ERROR && !has_error) {
+                Variable *j_var = find_local(local, "j");
+                if (j_var) {
+                    char temp_path[1024];
+                    snprintf(temp_path, sizeof(temp_path), "%s.tmp", path);
+                    FILE *out = fopen(temp_path, "wb");
+                    if (out) {
+                        stringify_json(out, j_var->value, 0);
+                        fclose(out);
+                        remove(path);
+                        rename(temp_path, path);
+                    } else {
+                        error_at(s->at, "failed to save Fjson file");
                     }
-                } else if (container.type == V_DICT) {
-                    Dict *dict = container.as.dict;
-                    int found = 0;
-                    for (size_t i = 0; i < dict->count && !has_error; i++) {
-                        Value eq = compare_values(OP_EQ, dict->items[i].key, key, s->at);
-                        if (!has_error && eq.as.boolean) {
-                            release(dict->items[i].value);
-                            dict->items[i].value = retain(val);
-                            found = 1;
-                        }
-                        release(eq);
-                        if (found) break;
-                    }
-                    if (!found && !has_error) {
-                        /* new key */
-                        if (dict->count == dict->capacity) {
-                            dict->capacity = dict->capacity ? dict->capacity * 2 : 8;
-                            dict->items = resize(dict->items, dict->capacity * sizeof(DictEntry));
-                        }
-                        dict->items[dict->count].key = retain(key);
-                        dict->items[dict->count].value = retain(val);
-                        dict->count++;
-                    }
-                } else if (container.type == V_STR) {
-                    error_at(s->at, "str does not support item assignment (strings are immutable)");
-                } else if (container.type == V_TUPLE) {
-                    error_at(s->at, "tuple does not support item assignment (tuples are immutable)");
-                } else {
-                    error_at(s->at, "'%s' does not support index assignment", type_label(container.type));
                 }
             }
-            release(container); release(key); release(val);
+            local->object.refs--;
+            release(filename);
+            if (flow.kind != FLOW_NORMAL) return flow;
+            continue;
+        }
+        if (s->kind == S_FJSON_REPLACE) {
+            Value rhs = evaluate(runtime, env, s->expr2);
+            if (has_error) break;
+            Value final_val;
+            if (s->type != V_VOID) {
+                /* compound assign: soft-get current value (0 if missing), apply op */
+                Operator op = (Operator)(s->type - 1);
+                Value cur = get_value_soft(env, s->expr);
+                if (cur.type == V_VOID) cur = integer_value(0); /* default to 0 */
+                final_val = arithmetic(op, cur, rhs, s->at);
+                release(cur);
+            } else {
+                final_val = retain(rhs);
+            }
+            release(rhs);
+            if (!has_error) set_member_value(runtime, env, s->expr, final_val, s->at);
+            release(final_val);
+            if (has_error) break;
+            continue;
+        }
+        if (s->kind == S_FJSON_ADD) {
+            Value val = evaluate(runtime, env, s->expr2);
+            if (has_error) break;
+            Value target = get_value_soft(env, s->expr);
+            if (target.type == V_LIST) {
+                /* append to existing list */
+                List *list = target.as.list;
+                if (list->count == list->capacity) {
+                    list->capacity = list->capacity ? list->capacity * 2 : 8;
+                    list->items = resize(list->items, list->capacity * sizeof(Value));
+                }
+                list->items[list->count++] = retain(val);
+                release(target);
+            } else {
+                /* target doesn't exist or isn't a list: create/set as new key */
+                release(target);
+                set_member_value(runtime, env, s->expr, val, s->at);
+            }
+            release(val);
+            if (has_error) break;
+            continue;
+        }
+        if (s->kind == S_FJSON_DELETE) {
+            if (s->expr->kind == E_MEMBER) {
+                Value obj = get_value_soft(env, s->expr->left);
+                if (obj.type == V_DICT) {
+                    Dict *dict = obj.as.dict;
+                    int found = -1;
+                    for (size_t i = 0; i < dict->count; i++) {
+                        if (dict->items[i].key.type == V_STR && !strcmp(dict->items[i].key.as.string->text, s->expr->text)) { found = (int)i; break; }
+                    }
+                    if (found >= 0) {
+                        release(dict->items[found].key); release(dict->items[found].value);
+                        for (size_t i = (size_t)found; i < dict->count - 1; i++) dict->items[i] = dict->items[i + 1];
+                        dict->count--;
+                    }
+                }
+                release(obj);
+            } else if (s->expr->kind == E_INDEX) {
+                Value obj = get_value_soft(env, s->expr->left);
+                Value key = evaluate(runtime, env, s->expr->right);
+                if (!has_error && obj.type == V_DICT) {
+                    Dict *dict = obj.as.dict;
+                    int found = -1;
+                    for (size_t i = 0; i < dict->count; i++) {
+                        Value eq = compare_values(OP_EQ, dict->items[i].key, key, s->at);
+                        if (!has_error && eq.as.boolean) found = (int)i;
+                        release(eq); if (found >= 0 || has_error) break;
+                    }
+                    if (found >= 0) {
+                        release(dict->items[found].key); release(dict->items[found].value);
+                        for (size_t i = (size_t)found; i < dict->count - 1; i++) dict->items[i] = dict->items[i + 1];
+                        dict->count--;
+                    }
+                } else if (!has_error && obj.type == V_LIST) {
+                    if (key.type == V_INT) {
+                        int64_t idx = key.as.integer;
+                        if (idx < 0) idx += (int64_t)obj.as.list->count;
+                        if (idx >= 0 && idx < (int64_t)obj.as.list->count) {
+                            release(obj.as.list->items[idx]);
+                            for (size_t i = (size_t)idx; i < obj.as.list->count - 1; i++) obj.as.list->items[i] = obj.as.list->items[i + 1];
+                            obj.as.list->count--;
+                        }
+                    }
+                }
+                release(obj); release(key);
+            }
+            if (has_error) break;
+            continue;
+        }
+        /* ── Index assignment: collection[key] = value ── */
+        if (s->kind == S_INDEX_ASSIGN) {
+            Value val = evaluate(runtime, env, s->expr2);
+            if (!has_error) set_member_value(runtime, env, s->expr, val, s->at);
+            release(val);
             if (has_error) break;
             continue;
         }

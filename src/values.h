@@ -137,6 +137,150 @@ static void define_variable(Env *env, const char *name, ValueType type, Value va
     Value copy = retain(value); release(v->value); v->value = copy;
 }
 
+static void stringify_json(FILE *fp, Value v, int indent) {
+    if (v.type == V_VOID) { fprintf(fp, "null"); }
+    else if (v.type == V_INT) { fprintf(fp, "%" PRId64, v.as.integer); }
+    else if (v.type == V_FLOAT) { fprintf(fp, "%g", v.as.decimal); }
+    else if (v.type == V_BOOL) { fprintf(fp, v.as.boolean ? "true" : "false"); }
+    else if (v.type == V_STR) {
+        fprintf(fp, "\"");
+        for (size_t i = 0; i < v.as.string->length; i++) {
+            char c = v.as.string->text[i];
+            if (c == '"') fprintf(fp, "\\\"");
+            else if (c == '\\') fprintf(fp, "\\\\");
+            else if (c == '\n') fprintf(fp, "\\n");
+            else if (c == '\r') fprintf(fp, "\\r");
+            else if (c == '\t') fprintf(fp, "\\t");
+            else fprintf(fp, "%c", c);
+        }
+        fprintf(fp, "\"");
+    } else if (v.type == V_LIST || v.type == V_TUPLE) {
+        fprintf(fp, "[\n");
+        size_t count = v.type == V_LIST ? v.as.list->count : v.as.tuple->count;
+        Value *items = v.type == V_LIST ? v.as.list->items : v.as.tuple->items;
+        for (size_t i = 0; i < count; i++) {
+            for (int j = 0; j < indent + 2; j++) fprintf(fp, " ");
+            stringify_json(fp, items[i], indent + 2);
+            if (i < count - 1) fprintf(fp, ",");
+            fprintf(fp, "\n");
+        }
+        for (int j = 0; j < indent; j++) fprintf(fp, " ");
+        fprintf(fp, "]");
+    } else if (v.type == V_DICT) {
+        fprintf(fp, "{\n");
+        for (size_t i = 0; i < v.as.dict->count; i++) {
+            for (int j = 0; j < indent + 2; j++) fprintf(fp, " ");
+            stringify_json(fp, v.as.dict->items[i].key, indent + 2);
+            fprintf(fp, ": ");
+            stringify_json(fp, v.as.dict->items[i].value, indent + 2);
+            if (i < v.as.dict->count - 1) fprintf(fp, ",");
+            fprintf(fp, "\n");
+        }
+        for (int j = 0; j < indent; j++) fprintf(fp, " ");
+        fprintf(fp, "}");
+    } else {
+        fprintf(fp, "null");
+    }
+}
+
+static void skip_json_ws(const char **p) {
+    while (**p == ' ' || **p == '\t' || **p == '\n' || **p == '\r') (*p)++;
+}
+
+static Value parse_json_val(Runtime *rt, const char **p) {
+    skip_json_ws(p);
+    if (**p == '"') {
+        (*p)++;
+        const char *start = *p;
+        size_t len = 0;
+        while (**p && **p != '"') {
+            if (**p == '\\') { (*p)++; }
+            (*p)++; len++;
+        }
+        char *buf = malloc(len + 1);
+        size_t out = 0;
+        const char *scan = start;
+        while (scan < *p) {
+            if (*scan == '\\') {
+                scan++;
+                if (*scan == 'n') buf[out++] = '\n';
+                else if (*scan == 'r') buf[out++] = '\r';
+                else if (*scan == 't') buf[out++] = '\t';
+                else buf[out++] = *scan;
+                scan++;
+            } else {
+                buf[out++] = *scan++;
+            }
+        }
+        buf[out] = '\0';
+        Value v = text_value(buf, out, (Location){1,1});
+        free(buf);
+        if (**p == '"') (*p)++;
+        return v;
+    } else if (**p == '{') {
+        (*p)++;
+        size_t cap = 4, count = 0;
+        Value *keys = malloc(cap * sizeof(Value));
+        Value *vals = malloc(cap * sizeof(Value));
+        skip_json_ws(p);
+        if (**p != '}') {
+            do {
+                skip_json_ws(p);
+                keys[count] = parse_json_val(rt, p);
+                skip_json_ws(p);
+                if (**p == ':') (*p)++;
+                vals[count] = parse_json_val(rt, p);
+                count++;
+                if (count == cap) { cap *= 2; keys = realloc(keys, cap * sizeof(Value)); vals = realloc(vals, cap * sizeof(Value)); }
+                skip_json_ws(p);
+                if (**p == ',') { (*p)++; continue; }
+                break;
+            } while (**p);
+        }
+        skip_json_ws(p);
+        if (**p == '}') (*p)++;
+        Value d = dict_value(rt, keys, vals, count);
+        for (size_t i = 0; i < count; i++) { release(keys[i]); release(vals[i]); }
+        free(keys); free(vals);
+        return d;
+    } else if (**p == '[') {
+        (*p)++;
+        size_t cap = 4, count = 0;
+        Value *vals = malloc(cap * sizeof(Value));
+        skip_json_ws(p);
+        if (**p != ']') {
+            do {
+                vals[count++] = parse_json_val(rt, p);
+                if (count == cap) { cap *= 2; vals = realloc(vals, cap * sizeof(Value)); }
+                skip_json_ws(p);
+                if (**p == ',') { (*p)++; continue; }
+                break;
+            } while (**p);
+        }
+        skip_json_ws(p);
+        if (**p == ']') (*p)++;
+        Value l = list_value(rt, vals, count);
+        for (size_t i = 0; i < count; i++) release(vals[i]);
+        free(vals);
+        return l;
+    } else if (strncmp(*p, "true", 4) == 0) {
+        *p += 4; return boolean_value(1);
+    } else if (strncmp(*p, "false", 5) == 0) {
+        *p += 5; return boolean_value(0);
+    } else if (strncmp(*p, "null", 4) == 0) {
+        *p += 4; return nothing();
+    } else if (**p == '-' || (**p >= '0' && **p <= '9')) {
+        char *end;
+        double d = strtod(*p, &end);
+        int is_float = 0;
+        for (const char *s = *p; s < end; s++) { if (*s == '.' || *s == 'e' || *s == 'E') is_float = 1; }
+        *p = end;
+        if (is_float) return decimal_value(d, (Location){1,1});
+        else return integer_value((int64_t)d);
+    }
+    return nothing();
+}
+
 typedef void (*VisitObject)(Object *, void *);
 static void visit_value(Value value, VisitObject visit, void *context) {
     Object *object = value_object(value); if (object) visit(object, context);

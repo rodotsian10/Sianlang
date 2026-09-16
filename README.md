@@ -5,7 +5,7 @@
 **간단한 문법으로 시작하는 프로그래밍 언어.**
 
 Python처럼 쉽게 배우고, 앞으로 2D 게임을 만들 수 있는 언어를 목표로 개발하고 있습니다.
-현재 개발 버전은 **0.4.1**이며, 컬렉션 인덱스 대입, list/dict 메서드, UTF-8 문자열 인덱싱, 수학/난수 내장함수, 파일 I/O를 새로 탑재했습니다.
+현재 개발 버전은 **0.4.2**이며, Fjson 데이터 조작 블록(`Fjson`, `replace`, `add`, `delete`), 컬렉션 인덱스 대입, list/dict 메서드, UTF-8 문자열 인덱싱, 수학/난수 내장함수, 파일 I/O를 탑재했습니다.
 
 [다운로드 웹사이트](https://rodotsian10.github.io/Sianlang/) · [릴리스 다운로드](https://github.com/rodotsian10/Sianlang/releases) · [문법 안내서](설명서/시안랭-문법규칙서.md)
 
@@ -23,18 +23,15 @@ Python처럼 쉽게 배우고, 앞으로 2D 게임을 만들 수 있는 언어�
 str name = "SianLang"
 log.f("Hello, {name}!")
 
-var user = {"name": "Sian", "score": 100}
-user["score"] = 200
-
-var file1 = open("output.txt", "w")
-file1.write("안녕 시안랭 0.4.1!\n")
-file1.close()
+Fjson "save.json"
+    replace j.player.hp += 10
+    add j.inventory = "전설의 검"
 ```
 
 ZIP에는 실행기, VS Code 확장, 실행 예제, 문법 문서가 포함됩니다.
 콘솔에서는 `Sianlang.exe 프로그램.sian`으로 실행합니다. [자세한 설치 안내](배포/시작하기.md)
 
-숫자 맞히기 게임은 `examples/guessing-game.sian`에서 확인할 수 있습니다. `time.now()`로 목표 숫자를 만들고, 모든 사용자 입력을 `try/catch`로 처리합니다.
+숫자 맞히기 게임은 `examples/guessing-game.sian`, JSON 세이브 조작 예제는 `examples/fjson-demo.sian`에서 확인할 수 있습니다.
 
 ## VS Code 지원
 
@@ -51,7 +48,7 @@ ZIP에는 실행기, VS Code 확장, 실행 예제, 문법 문서가 포함됩�
 
 `int`, `float`, `str`, `bool`, `var`, `None`, list, tuple, dict, `for`, `range`, `time.now()`, 조건문과 반복문, 반복문 `else`, 함수 기본값,
 이름 지정 인수, `#가변인수`, 중첩 함수와 클로저, 함수 전달, `try`/`catch`, `log`와 `log.f`,
-**컬렉션 인덱스 대입(`list[i]=x`, `dict[k]=v`)**, **컬렉션 메서드(`append`, `pop`, `keys`, `values`, `items`)**, **UTF-8 문자열 인덱싱 및 순회**,
+**Fjson 데이터 조작 블록(`Fjson`, `replace`, `add`, `delete`)**, **컬렉션 인덱스 대입(`list[i]=x`, `dict[k]=v`)**, **컬렉션 메서드(`append`, `pop`, `keys`, `values`, `items`)**, **UTF-8 문자열 인덱싱 및 순회**,
 **수학 내장함수(`abs`, `min`, `max`, `round`)**, **난수 내장함수(`random.int`, `random.float`, `random.choice`)**, **파일 I/O(`open`, `read`, `write`, `close`)**를 지원합니다.
 범위는 들여쓰기로 구분합니다.
 

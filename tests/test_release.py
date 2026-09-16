@@ -38,6 +38,7 @@ with tempfile.TemporaryDirectory(prefix='배포 확인 & ', dir=ROOT / 'build') 
     assert run(['--version']).strip() == f'SianLang {version}'
     assert 'Hello, SianLang!' in run(['examples/hello.sian'])
     assert '리스트 항목:' in run(['examples/collections-demo.sian'])
+    assert 'Fjson 데이터 저장 완료' in run(['examples/fjson-demo.sian'])
     with ZipFile(portable / f"{meta['name']}-{version}.vsix") as extension:
         assert extension.read('extension/bin/win32-x64/Sianlang.exe') == exe.read_bytes()
         assert extension.read('extension/icons/sianlang-file.svg') == (ROOT / 'Sianlangicon.svg').read_bytes()

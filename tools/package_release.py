@@ -26,6 +26,7 @@ files = {
     'examples/dungeon-rpg.sian': ROOT / 'examples/dungeon-rpg.sian',
     'examples/collections-demo.sian': ROOT / 'examples/collections-demo.sian',
     'examples/file-io-demo.sian': ROOT / 'examples/file-io-demo.sian',
+    'examples/fjson-demo.sian': ROOT / 'examples/fjson-demo.sian',
     vsix_name: out / vsix_name,
 }
 zip_name = f'SianLang-{version}-windows-x64.zip'
@@ -52,4 +53,4 @@ for name in [zip_name, vsix_name, 'SHA256SUMS.txt']:
 (site / 'index.html').write_text(page, encoding='utf-8')
 (site / '.nojekyll').touch()
 shutil.copyfile(ROOT / 'Sianlangicon.svg', site / 'Sianlangicon.svg')
-print(f'Built and verified portable ZIP, VSIX, checksums and download page: {out}')
+print(f'Built and verified portable ZIP, VSIX, checksums and download page: {out}', flush=True)

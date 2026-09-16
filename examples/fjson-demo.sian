@@ -1,0 +1,29 @@
+|| SianLang 0.4.2 - Fjson 데이터 조작 예제 (게임 세이브 데이터 관리)
+
+int init_bonus = 50
+
+|| 1. Fjson 블록으로 세이브 데이터 생성 및 조작 (Atomic Write)
+Fjson "save.json"
+    || replace: 값 변경 및 복합 대입 연산(+=, -= 등)
+    replace j.player = {"hp": 100}
+    replace j.player.hp += init_bonus
+    replace j.score = 500
+    replace j.score += 150
+
+    || add: 배열(List) 요소 추가(append) 및 신규 키 생성
+    replace j.inventory = ["체력 포션"]
+    add j.inventory = "전설의 검"
+    add j.player.title = "아키아의 용사"
+
+    || delete: 키 삭제
+    replace j.temp_buff = "공격력 버프"
+    delete j.temp_buff
+
+log "=== Fjson 데이터 저장 완료 ==="
+
+|| 2. Fjson 블록으로 세이브 데이터 읽기 및 출력
+Fjson "save.json"
+    log.f("플레이어 체력: {j.player.hp}")
+    log.f("플레이어 인벤토리: {j.inventory}")
+    log.f("플레이어 칭호: {j.player.title}")
+    log.f("최종 점수: {j.score}")

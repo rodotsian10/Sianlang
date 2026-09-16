@@ -68,4 +68,4 @@ with ZipFile(output) as archive:
     assert json.loads(archive.read('extension/package.json')) == meta
     for file in files:
         assert archive.read('extension/' + file) == (ROOT / file).read_bytes()
-print(f'Built and verified {output.name}')
+print(f'Built and verified {output.name}', flush=True)

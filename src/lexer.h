@@ -5,6 +5,7 @@ typedef enum {
     T_EOF, T_NEWLINE, T_INDENT, T_DEDENT, T_NAME, T_NUMBER, T_STRING,
     T_LPAREN, T_RPAREN, T_COMMA, T_PLUS, T_MINUS, T_STAR, T_SLASH,
     T_PERCENT, T_BANG, T_EQUAL, T_EQ, T_NE, T_LT, T_LE, T_GT, T_GE,
+    T_PLUS_EQ, T_MINUS_EQ, T_STAR_EQ, T_SLASH_EQ, T_PERCENT_EQ,
     T_DOT, T_HASH, T_LBRACKET, T_RBRACKET, T_LBRACE, T_RBRACE, T_COLON
 } TokenKind;
 typedef struct { TokenKind kind; char *text; Location at; } Token;
@@ -161,7 +162,15 @@ static void lex(const char *text, TokenList *list, Arena *arena) {
         }
         pos++; column++;
         if (text[pos] == '=') {
-            TokenKind pair = kind == T_BANG ? T_NE : kind == T_EQUAL ? T_EQ : kind == T_LT ? T_LE : kind == T_GT ? T_GE : kind;
+            TokenKind pair = kind == T_BANG ? T_NE :
+                             kind == T_EQUAL ? T_EQ :
+                             kind == T_LT ? T_LE :
+                             kind == T_GT ? T_GE :
+                             kind == T_PLUS ? T_PLUS_EQ :
+                             kind == T_MINUS ? T_MINUS_EQ :
+                             kind == T_STAR ? T_STAR_EQ :
+                             kind == T_SLASH ? T_SLASH_EQ :
+                             kind == T_PERCENT ? T_PERCENT_EQ : kind;
             if (pair != kind) { kind = pair; pos++; column++; }
         }
         emit(list, kind, NULL, at);

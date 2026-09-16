@@ -21,7 +21,8 @@ struct Expr {
     size_t argc;
 };
 typedef enum { S_DECLARE, S_ASSIGN, S_INDEX_ASSIGN, S_RETURN, S_EXPR, S_TRY,
-    S_IF, S_WHILE, S_REPEAT, S_FOR, S_FUNCTION, S_BREAK, S_CONTINUE } StatementKind;
+    S_IF, S_WHILE, S_REPEAT, S_FOR, S_FUNCTION, S_BREAK, S_CONTINUE,
+    S_FJSON, S_FJSON_REPLACE, S_FJSON_ADD, S_FJSON_DELETE } StatementKind;
 typedef struct NameList { char *name; Expr *default_value; int rest; struct NameList *next; } NameList;
 typedef struct Statement Statement;
 struct Statement {
@@ -274,6 +275,20 @@ static Expr *parse_expression(Parser *p, int min_precedence) {
     return left;
 }
 
+static int is_compound_assign(TokenKind kind) {
+    return kind == T_PLUS_EQ || kind == T_MINUS_EQ || kind == T_STAR_EQ || kind == T_SLASH_EQ || kind == T_PERCENT_EQ;
+}
+static Operator compound_assign_to_op(TokenKind kind) {
+    switch (kind) {
+        case T_PLUS_EQ: return OP_ADD;
+        case T_MINUS_EQ: return OP_SUB;
+        case T_STAR_EQ: return OP_MUL;
+        case T_SLASH_EQ: return OP_DIV;
+        case T_PERCENT_EQ: return OP_MOD;
+        default: return OP_ADD;
+    }
+}
+
 static Statement *parse_statement(Parser *p);
 static Statement *parse_suite(Parser *p) {
     expect(p, T_NEWLINE, "unexpected text after statement");
@@ -371,8 +386,41 @@ static Statement *parse_statement(Parser *p) {
         if (word(peek(p), "else")) { p->pos++; s->otherwise = parse_suite(p); }
         return s;
     }
+    if (word(token, "Fjson")) {
+        p->pos++;
+        Statement *s = new_statement(p, S_FJSON, token->at);
+        s->expr = parse_expression(p, 0);
+        s->body = parse_suite(p);
+        return s;
+    }
     Statement *s;
-    if (word(token, "log")) {
+    if (word(token, "replace")) {
+        p->pos++;
+        s = new_statement(p, S_FJSON_REPLACE, token->at);
+        s->expr = parse_expression(p, 0);
+        TokenKind eq_tok = peek(p)->kind;
+        if (eq_tok == T_EQUAL) {
+            p->pos++;
+            s->expr2 = parse_expression(p, 0);
+            s->type = V_VOID; /* plain assign, op stored as 0 */
+        } else if (is_compound_assign(eq_tok)) {
+            p->pos++;
+            s->expr2 = parse_expression(p, 0); /* just the RHS delta */
+            s->type = (ValueType)(compound_assign_to_op(eq_tok) + 1); /* store op+1, 0 = plain */
+        } else {
+            syntax_error(p, peek(p)->at, "expected '=' or compound assignment after replace target");
+        }
+    } else if (word(token, "add")) {
+        p->pos++;
+        s = new_statement(p, S_FJSON_ADD, token->at);
+        s->expr = parse_expression(p, 0);
+        expect(p, T_EQUAL, "expected '=' after add target");
+        s->expr2 = parse_expression(p, 0);
+    } else if (word(token, "delete")) {
+        p->pos++;
+        s = new_statement(p, S_FJSON_DELETE, token->at);
+        s->expr = parse_expression(p, 0);
+    } else if (word(token, "log")) {
         p->pos++;
         Expr *callee = new_expr(p, E_NAME, token->at); callee->text = token->text;
         if (accept_token(p, T_DOT)) {
@@ -416,21 +464,41 @@ static Statement *parse_statement(Parser *p) {
             if (p->tokens->items[scan].kind == T_RBRACKET) depth--;
             scan++;
         }
-        if (depth == 0 && scan < p->tokens->count && p->tokens->items[scan].kind == T_EQUAL
+        if (depth == 0 && scan < p->tokens->count && (p->tokens->items[scan].kind == T_EQUAL || is_compound_assign(p->tokens->items[scan].kind))
             && (scan + 1 >= p->tokens->count || p->tokens->items[scan + 1].kind != T_EQUAL)) {
             /* index assignment: parse name[key] as expression then consume '=' and RHS */
             s = new_statement(p, S_INDEX_ASSIGN, token->at);
             s->expr = parse_expression(p, 0); /* evaluates name[key] → E_INDEX node */
-            expect(p, T_EQUAL, "expected '=' in index assignment");
-            s->expr2 = parse_expression(p, 0);
+            TokenKind eq_tok = peek(p)->kind;
+            p->pos++;
+            if (eq_tok == T_EQUAL) {
+                s->expr2 = parse_expression(p, 0);
+            } else {
+                Expr *rhs = parse_expression(p, 0);
+                Expr *bin = new_expr(p, E_BINARY, token->at);
+                bin->left = s->expr; bin->right = rhs;
+                bin->op = compound_assign_to_op(eq_tok);
+                s->expr2 = bin;
+            }
         } else {
             s = new_statement(p, S_EXPR, token->at);
             s->expr = parse_expression(p, 0);
             if (s->expr->kind != E_CALL) syntax_error(p, token->at, "expected a declaration, assignment, or function call");
         }
-    } else if (token->kind == T_NAME && p->tokens->items[p->pos + 1].kind == T_EQUAL) {
+    } else if (token->kind == T_NAME && (p->tokens->items[p->pos + 1].kind == T_EQUAL || is_compound_assign(p->tokens->items[p->pos + 1].kind))) {
         s = new_statement(p, S_ASSIGN, token->at); s->name = parse_name(p);
-        p->pos++; s->expr = parse_expression(p, 0);
+        TokenKind eq_tok = peek(p)->kind;
+        p->pos++;
+        if (eq_tok == T_EQUAL) {
+            s->expr = parse_expression(p, 0);
+        } else {
+            Expr *rhs = parse_expression(p, 0);
+            Expr *lhs = new_expr(p, E_NAME, token->at); lhs->text = s->name;
+            Expr *bin = new_expr(p, E_BINARY, token->at);
+            bin->left = lhs; bin->right = rhs;
+            bin->op = compound_assign_to_op(eq_tok);
+            s->expr = bin;
+        }
     } else {
         s = new_statement(p, S_EXPR, token->at);
         s->expr = parse_expression(p, 0);

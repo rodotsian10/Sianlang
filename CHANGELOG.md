@@ -1,3 +1,10 @@
+# SianLang 0.4.2
+
+- Fjson 세이브 데이터 조작 들여쓰기 블록 추가 (`Fjson "path.json"`).
+- Fjson 데이터 연산 키워드 구현: `replace` (값 대입 및 `+=`, `-=`, `*=`, `/=` 복합 대입), `add` (List append 및 Dict 신규 Key 생성), `delete` (Key 삭제).
+- Fjson 원자적 저장 (Atomic Write) 및 `j.` 데이터 스코프 지원.
+- JSON 게임 세이브 데이터 조작 예제 파일 추가 (`examples/fjson-demo.sian`).
+
 # SianLang 0.4.1
 
 - 컬렉션 인덱스 대입 지원 (`list[idx] = val`, `dict[key] = val`, 음수 인덱싱 및 딕셔너리 신규 키 추가).

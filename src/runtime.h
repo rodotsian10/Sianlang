@@ -1053,9 +1053,17 @@ static void game_run(Runtime *runtime, const char *first, int width, int height,
             InvalidateRect(runtime->window, NULL, FALSE);
             UpdateWindow(runtime->window);
         }
-        if (runtime->fps > 0) {
-            DWORD target_ms = (DWORD)(1000 / runtime->fps);
-            if (target_ms) Sleep(target_ms);
+        if (runtime->fps > 0 && !runtime->game_exit && !has_error) {
+            const double target_seconds = 1.0 / (double)runtime->fps;
+            LARGE_INTEGER current;
+            for (;;) {
+                QueryPerformanceCounter(&current);
+                double remaining = target_seconds -
+                    (double)(current.QuadPart - now.QuadPart) / (double)frequency.QuadPart;
+                if (remaining <= 0) break;
+                DWORD wait_ms = (DWORD)(remaining * 1000.0);
+                Sleep(wait_ms > 1 ? wait_ms - 1 : 0);
+            }
         }
     }
     if (runtime->scene_env) { runtime->scene_env->object.refs--; runtime->scene_env = NULL; }

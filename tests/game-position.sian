@@ -1,0 +1,15 @@
+game.fps = 120
+game.start("play")
+
+scene play
+    var x = 0
+    var frames = 0
+    var initialized = false
+    if initialized == false
+        x = 100
+        initialized = true
+    frames += 1
+    x += 5
+    if frames == 3
+        log x
+        game.close()

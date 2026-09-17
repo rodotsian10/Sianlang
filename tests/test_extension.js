@@ -8,7 +8,7 @@ async function scenario(options = {}) {
   let callback;
   const errors = [], tasks = [];
   const root = path.resolve(__dirname, '..');
-  const file = path.join(root, "space & dollar$ back` quote' file.sian");
+  const file = options.file || path.join(root, "space & dollar$ back` quote' file.sian");
   const folder = { uri: { fsPath: root } };
   const api = {
     commands: { registerCommand: (_, cb) => { callback = cb; return {}; } },
@@ -61,6 +61,7 @@ async function scenario(options = {}) {
   assert.equal(good.tasks[0].execution.command, path.join(good.root, 'sianlang-vscode', 'bin', 'win32-x64', 'Sianlang.exe'));
   assert.equal(good.tasks[0].execution.args.length, 1);
   assert.equal(good.tasks[0].execution.args[0], good.file);
+  assert.equal(good.tasks[0].execution.options.cwd, path.dirname(good.file));
   assert.equal(good.tasks[0].presentationOptions.focus, true);
   count++;
   for (const option of ['noEditor', 'saveFalse', 'saveError', 'missing', 'directory', 'runError', 'untrusted', 'remote', 'untitled', 'linux']) {
@@ -77,5 +78,8 @@ async function scenario(options = {}) {
     if (options.noFolder) assert.equal(result.tasks[0].scope, 1);
     count++;
   }
+  const nested = await scenario({ file: path.join(good.root, 'sianlang1stgame', 'game.sian') });
+  assert.equal(nested.tasks[0].execution.options.cwd, path.join(good.root, 'sianlang1stgame'));
+  count++;
   console.log(`${count} extension scenarios passed`);
 })().catch(error => { console.error(error); process.exitCode = 1; });

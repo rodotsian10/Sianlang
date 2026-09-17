@@ -1,4 +1,4 @@
 || Convert a PNG into a SianLang sprite file.
-|| Run this script from the project root.
-rodot.create("sianlang-vscode/icon.png", "sianlang1stgame/player.rodot")
+|| Run this script from the folder containing this file.
+rodot.create("../sianlang-vscode/icon.png", "player.rodot")
 log "player.rodot created"

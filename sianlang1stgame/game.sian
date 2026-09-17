@@ -5,28 +5,30 @@ game.fps = 60
 game.start("play", 640, 480, "SianLang 1st Game")
 
 scene play
-    var player = rodot.load("sianlang1stgame/player.rodot")
-    var target = rodot.load("sianlang1stgame/player.rodot")
+    var player = rodot.load("player.rodot")
+    var target = rodot.load("player.rodot")
     var score = 0
+    var initialized = false
 
-    player.x = 100
-    player.y = 190
-    player.scale = 0.5
-    player.speed = 5
-
-    target.x = 470
-    target.y = 190
-    target.scale = 0.35
-    target.layer = -1
+    if initialized == false
+        player.x = 100
+        player.y = 190
+        player.scale = 0.5
+        player.speed = 300
+        target.x = 470
+        target.y = 190
+        target.scale = 0.35
+        target.layer = -1
+        initialized = true
 
     if key.down("right")
-        player.x += player.speed
+        player.x += player.speed * game.delta_time()
     if key.down("left")
-        player.x -= player.speed
+        player.x -= player.speed * game.delta_time()
     if key.down("up")
-        player.y -= player.speed
+        player.y -= player.speed * game.delta_time()
     if key.down("down")
-        player.y += player.speed
+        player.y += player.speed * game.delta_time()
     if collision(player, target)
         score = 1
 

@@ -20,7 +20,8 @@ function activate(context) {
       return;
     }
     const workspaceFolder = vscode.workspace.getWorkspaceFolder(document.uri);
-    const cwd = workspaceFolder ? workspaceFolder.uri.fsPath : path.dirname(document.fileName);
+    const cwd = path.dirname(document.fileName);
+    const projectRoot = workspaceFolder ? workspaceFolder.uri.fsPath : cwd;
 
     try {
       if (!(await document.save())) {
@@ -33,7 +34,7 @@ function activate(context) {
         return;
       }
       const executableCandidates = [configured
-        ? (path.isAbsolute(configured) ? configured : path.resolve(cwd, configured))
+        ? (path.isAbsolute(configured) ? configured : path.resolve(projectRoot, configured))
         : path.join(context.extensionPath, 'bin', 'win32-x64', 'Sianlang.exe')];
       const executable = executableCandidates.find((candidate) => {
         try { return fs.statSync(candidate).isFile(); } catch { return false; }

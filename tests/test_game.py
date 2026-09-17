@@ -19,6 +19,10 @@ scene = run(ROOT / 'tests/game-scenes.sian')
 assert scene.returncode == 0, scene.stderr
 assert scene.stdout == 'title\ngame\ngame over\n', scene.stdout
 
+position = run(ROOT / 'tests/game-position.sian')
+assert position.returncode == 0, position.stderr
+assert position.stdout == '115\n', position.stdout
+
 generated = ROOT / 'build/icon.rodot'
 generated.unlink(missing_ok=True)
 sprite = run(ROOT / 'tests/rodot-smoke.sian')

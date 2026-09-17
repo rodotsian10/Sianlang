@@ -7,5 +7,4 @@
 - [인덱스 대입 및 메서드](index-assign.md) · [수학/난수](math-random.md) · [파일 I/O open](file-io.md) · [Fjson 세이브 조작](fjson.md)
 - [조건 if/else](if.md) · [반복문](loops.md) · [break/continue](break-continue.md)
 - [함수](functions.md) · [클로저](closures.md) · [try/catch](try-catch.md)
-- [연산자](operators.md) · [주석](comments.md)
-
+- [연산자](operators.md) · [주석](comments.md) · [게임/장면/rodot](game.md)

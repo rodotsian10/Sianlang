@@ -1,0 +1,12 @@
+rodot.create("sianlang-vscode/icon.png", "build/icon-live.rodot")
+game.start("play")
+
+scene play
+    var sprite = rodot.load("build/icon-live.rodot")
+    var frames = 0
+    frames += 1
+    sprite.x += 1
+    if frames == 3
+        rodot.save(sprite)
+        log "saved"
+        game.close()

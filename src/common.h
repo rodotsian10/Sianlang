@@ -22,6 +22,9 @@
 #include <wchar.h>
 #ifdef _WIN32
 #include <windows.h>
+#include <gdiplus/gdiplus.h>
+#include <objidl.h>
+#include <shlwapi.h>
 #endif
 
 #define SOURCE_LIMIT (16u * 1024u * 1024u)

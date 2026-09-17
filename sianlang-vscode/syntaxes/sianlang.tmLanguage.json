@@ -35,7 +35,7 @@
     },
     {
       "name": "keyword.control.sianlang",
-      "match": "\\b(if|else|try|catch|repeat|while|loop|for|in|return|break|continue|and|or|Fjson|replace|add|delete)\\b"
+      "match": "\\b(if|else|try|catch|repeat|while|loop|for|in|return|break|continue|and|or|Fjson|Frodot|scene|replace|add|delete)\\b"
     },
     {
       "name": "storage.type.sianlang",
@@ -47,7 +47,7 @@
     },
     {
       "name": "support.function.sianlang",
-      "match": "\\b(log(?:\\.f)?|input|len|range|time(?:\\.now)?|abs|min|max|round|random(?:\\.(?:int|float|choice))?|open)\\b"
+      "match": "\\b(log(?:\\.f)?|input|len|range|time(?:\\.now)?|abs|min|max|round|random(?:\\.(?:int|float|choice))?|open|game(?:\\.(?:start|close|delta_time))?|scene\\.change|key\\.down|rodot(?:\\.(?:create|load|save))?|draw\\.(?:rect|circle|line|text))\\b"
     },
     {
       "name": "support.function.method.sianlang",

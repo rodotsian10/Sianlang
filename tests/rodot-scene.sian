@@ -1,0 +1,17 @@
+game.fps = 30
+game.start("play")
+
+scene play
+    var icon = rodot.load("build/icon.rodot")
+    var frames = 0
+    frames += 1
+    Frodot icon
+        replace r.data.x += 5
+        replace r.data.y = 20
+    draw.rect(200, 30, 80, 60, "#ff5555")
+    draw.circle(350, 60, 25, "#55ff55")
+    draw.line(400, 20, 500, 100)
+    draw.text("SianLang", 20, 180)
+    if frames == 3
+        log icon.data.x, icon.data.y
+        game.close()

@@ -1,0 +1,3 @@
+var icon = rodot.load("build/icon.rodot")
+Frodot icon
+    replace r.meta.width = 1

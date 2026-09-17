@@ -26,9 +26,24 @@ typedef struct { Value key, value; } DictEntry;
 struct Dict { Object object; size_t count, capacity; DictEntry *items; };
 typedef enum { FLOW_NORMAL, FLOW_RETURN, FLOW_BREAK, FLOW_CONTINUE, FLOW_ERROR } FlowKind;
 typedef struct { FlowKind kind; Value value; } Flow;
+typedef struct { int kind, x, y, a, b; uint32_t color; Value label; } DrawCommand;
+#ifdef _WIN32
+typedef struct { Value sprite; GpBitmap *bitmap; IStream *stream; } SpriteBitmap;
+#endif
 typedef struct {
     Statement *program;
     Env *global;
+    Env *scene_env;
+    const char *next_scene;
+    int fps, game_active, game_exit, frodot_active;
+    double delta_time;
+    DrawCommand *draws;
+    size_t draw_count, draw_capacity;
+#ifdef _WIN32
+    HWND window;
+    SpriteBitmap *images;
+    size_t image_count, image_capacity;
+#endif
     Object *objects;
     size_t allocations, object_count;
     unsigned int call_depth, eval_depth, block_depth;
@@ -270,13 +285,17 @@ static Value parse_json_val(Runtime *rt, const char **p) {
     } else if (strncmp(*p, "null", 4) == 0) {
         *p += 4; return nothing();
     } else if (**p == '-' || (**p >= '0' && **p <= '9')) {
+        const char *start = *p;
         char *end;
         double d = strtod(*p, &end);
         int is_float = 0;
         for (const char *s = *p; s < end; s++) { if (*s == '.' || *s == 'e' || *s == 'E') is_float = 1; }
         *p = end;
         if (is_float) return decimal_value(d, (Location){1,1});
-        else return integer_value((int64_t)d);
+        errno = 0;
+        int64_t exact = strtoll(start, NULL, 10);
+        if (errno == ERANGE) { error_at((Location){1,1}, "JSON integer is outside int range"); return nothing(); }
+        return integer_value(exact);
     }
     return nothing();
 }

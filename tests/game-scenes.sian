@@ -1,0 +1,17 @@
+game.fps = 30
+game.start("title")
+
+scene title
+    log "title"
+    scene.change("game")
+
+scene game
+    var count = 0
+    count += 1
+    if count == 2
+        log "game"
+        scene.change("game_over")
+
+scene game_over
+    log "game over"
+    game.close()

@@ -1,3 +1,9 @@
+# SianLang 0.5.0 (development)
+
+- Scene blocks, explicit scene changes, automatic Windows game window loop, configurable FPS, and real-time key state.
+- `.rodot` PNG + JSON files with `rodot.create/load/save`, source image dimensions, and temporary `Frodot` edits.
+- Automatic sprite rendering and `draw.rect/circle/line/text` commands; VS Code highlighting and snippets.
+
 # SianLang 0.4.2
 
 - Fjson 세이브 데이터 조작 들여쓰기 블록 추가 (`Fjson "path.json"`).

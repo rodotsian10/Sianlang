@@ -1,0 +1,20 @@
+rodot.create("sianlang-vscode/icon.png", "build/icon.rodot")
+var icon = rodot.load("build/icon.rodot")
+log icon.name, icon.meta.width, icon.meta.height
+Frodot icon
+    replace r.data.x = 42
+    replace r.data.speed += 3
+    add r.data.user.hp = 100
+log icon.data.x, icon.data.speed, icon.data.user.hp
+icon.x += 2
+icon.visible = false
+log icon.x, icon.visible, icon.width, icon.height
+var original = rodot.load("build/icon.rodot")
+log original.data.x
+log collision(icon, original)
+icon.x = 500
+log collision(icon, original)
+icon.x = 44
+rodot.save(icon)
+var saved = rodot.load("build/icon.rodot")
+log saved.data.x, saved.data.visible, saved.data.user.hp

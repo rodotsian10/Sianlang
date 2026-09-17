@@ -20,6 +20,7 @@ files = {
     'LICENSE': ROOT / 'LICENSE',
     'START-HERE.md': ROOT / '배포/시작하기.md',
     'CHANGELOG.md': ROOT / 'CHANGELOG.md',
+    'game-api.md': ROOT / 'docs/game-api.md',
     'grammar.md': ROOT / '설명서/시안랭-문법규칙서.md',
     'examples/hello.sian': ROOT / 'examples/hello.sian',
     'examples/guessing-game.sian': ROOT / 'examples/guessing-game.sian',

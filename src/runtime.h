@@ -3,6 +3,7 @@
 
 #include "values.h"
 #include "printing.h"
+#include "rodot.h"
 static const char *skip_space(const char *s) { while (isspace((unsigned char)*s)) s++; return s; }
 static int decimal_text(const char *s) {
     s = skip_space(s);
@@ -170,6 +171,7 @@ static Value arithmetic(Operator op, Value a, Value b, Location at) {
 
 static Value evaluate(Runtime *runtime, Env *env, Expr *expr);
 static Flow execute(Runtime *runtime, Env *env, Statement *statement);
+static void game_run(Runtime *runtime, const char *first, int width, int height, const char *title, Location at);
 
 #include "calls.h"
 
@@ -228,6 +230,11 @@ static Value evaluate_inner(Runtime *runtime, Env *env, Expr *expr) {
                         res = retain(obj.as.dict->items[i].value);
                         found = 1; break;
                     }
+                }
+                if (!found && rodot_field(obj, "_rodot_path")) {
+                    Value *section = rodot_field(obj, rodot_property(expr->text) ? "data" : "meta");
+                    Value *entry = section ? rodot_field(*section, expr->text) : NULL;
+                    if (entry) { res = retain(*entry); found = 1; }
                 }
                 if (!found) error_at(expr->at, "dictionary key '%s' not found", expr->text);
             } else {
@@ -336,6 +343,14 @@ static Value assignment_value(Value v, ValueType target, Expr *expr, const char 
 
 /* Get the value at an expr path without raising an error on missing keys.
    Returns nothing() (V_VOID) if the path doesn't exist. */
+static int frodot_target_allowed(Expr *expr) {
+    while (expr && (expr->kind == E_MEMBER || expr->kind == E_INDEX)) {
+        if (expr->left && expr->left->kind == E_NAME && !strcmp(expr->left->text, "r"))
+            return expr->kind == E_MEMBER && !strcmp(expr->text, "data");
+        expr = expr->left;
+    }
+    return 0;
+}
 static Value get_value_soft(Env *env, Expr *expr) {
     if (expr->kind == E_NAME) {
         Variable *v = find_variable(env, expr->text);
@@ -357,6 +372,19 @@ static Value get_value_soft(Env *env, Expr *expr) {
 }
 
 static void set_member_value(Runtime *rt, Env *env, Expr *expr, Value val, Location at) {
+    Expr *root = expr, *first = NULL;
+    while (root && (root->kind == E_MEMBER || root->kind == E_INDEX)) {
+        first = root; root = root->left;
+    }
+    if (root && root->kind == E_NAME && first) {
+        Variable *source = find_variable(env, root->text);
+        if (source && rodot_field(source->value, "_rodot_path") &&
+            (first->kind != E_MEMBER || !strcmp(first->text, "meta") ||
+             !strcmp(first->text, "name") || !strcmp(first->text, "_rodot_path") ||
+             !strcmp(first->text, "width") || !strcmp(first->text, "height"))) {
+            error_at(at, "rodot image metadata is immutable"); return;
+        }
+    }
     if (expr->kind == E_NAME) {
         Variable *v = find_variable(env, expr->text);
         if (v) { release(v->value); v->value = retain(val); }
@@ -374,7 +402,9 @@ static void set_member_value(Runtime *rt, Env *env, Expr *expr, Value val, Locat
             obj = get_value_soft(env, expr->left);
         }
         if (obj.type == V_DICT) {
-            Dict *dict = obj.as.dict;
+            Value *data = rodot_field(obj, "_rodot_path") && rodot_property(expr->text)
+                ? rodot_field(obj, "data") : NULL;
+            Dict *dict = data && data->type == V_DICT ? data->as.dict : obj.as.dict;
             int found = 0;
             for (size_t i = 0; i < dict->count; i++) {
                 if (dict->items[i].key.type == V_STR && !strcmp(dict->items[i].key.as.string->text, expr->text)) {
@@ -436,7 +466,16 @@ static void set_member_value(Runtime *rt, Env *env, Expr *expr, Value val, Locat
 
 static Flow execute_inner(Runtime *runtime, Env *env, Statement *statement) {
     for (Statement *s = statement; s && !has_error; s = s->next) {
+        if (runtime->game_active && (runtime->next_scene || runtime->game_exit)) break;
         collect(runtime, 0);
+        if (s->kind == S_SCENE) continue;
+        if (s->kind == S_GAME_FPS) {
+            Value value = evaluate(runtime, env, s->expr);
+            if (!has_error && (value.type != V_INT || value.as.integer < 1 || value.as.integer > 240))
+                error_at(s->at, "game.fps must be an int from 1 to 240");
+            if (!has_error) runtime->fps = (int)value.as.integer;
+            release(value); continue;
+        }
         if (s->kind == S_FUNCTION) {
             Variable *previous = find_local(env, s->name);
             if (previous && previous->type != V_ANY && previous->type != V_FUNCTION) {
@@ -559,6 +598,23 @@ static Flow execute_inner(Runtime *runtime, Env *env, Statement *statement) {
             continue;
         }
         /* ── Fjson blocks ── */
+        if (s->kind == S_FRODOT) {
+            Value sprite = evaluate(runtime, env, s->expr);
+            Value *path = rodot_field(sprite, "_rodot_path");
+            if (!has_error && (!path || path->type != V_STR))
+                error_at(s->at, "Frodot requires a loaded rodot sprite");
+            if (has_error) { release(sprite); break; }
+            Env *local = new_env(runtime, env);
+            define_variable(local, "r", V_ANY, sprite);
+            release(sprite);
+            int previous = runtime->frodot_active;
+            runtime->frodot_active = 1;
+            Flow flow = execute(runtime, local, s->body);
+            runtime->frodot_active = previous;
+            local->object.refs--;
+            if (flow.kind != FLOW_NORMAL) return flow;
+            continue;
+        }
         if (s->kind == S_FJSON) {
             Value filename = evaluate(runtime, env, s->expr);
             if (has_error || filename.type != V_STR) { error_at(s->at, "Fjson filename must be str"); release(filename); break; }
@@ -614,6 +670,9 @@ static Flow execute_inner(Runtime *runtime, Env *env, Statement *statement) {
             continue;
         }
         if (s->kind == S_FJSON_REPLACE) {
+            if (runtime->frodot_active && !frodot_target_allowed(s->expr)) {
+                error_at(s->at, "Frodot may modify r.data only"); break;
+            }
             Value rhs = evaluate(runtime, env, s->expr2);
             if (has_error) break;
             Value final_val;
@@ -634,6 +693,9 @@ static Flow execute_inner(Runtime *runtime, Env *env, Statement *statement) {
             continue;
         }
         if (s->kind == S_FJSON_ADD) {
+            if (runtime->frodot_active && !frodot_target_allowed(s->expr)) {
+                error_at(s->at, "Frodot may modify r.data only"); break;
+            }
             Value val = evaluate(runtime, env, s->expr2);
             if (has_error) break;
             Value target = get_value_soft(env, s->expr);
@@ -656,6 +718,9 @@ static Flow execute_inner(Runtime *runtime, Env *env, Statement *statement) {
             continue;
         }
         if (s->kind == S_FJSON_DELETE) {
+            if (runtime->frodot_active && !frodot_target_allowed(s->expr)) {
+                error_at(s->at, "Frodot may modify r.data only"); break;
+            }
             if (s->expr->kind == E_MEMBER) {
                 Value obj = get_value_soft(env, s->expr->left);
                 if (obj.type == V_DICT) {
@@ -705,6 +770,9 @@ static Flow execute_inner(Runtime *runtime, Env *env, Statement *statement) {
         }
         /* ── Index assignment: collection[key] = value ── */
         if (s->kind == S_INDEX_ASSIGN) {
+            if (runtime->frodot_active && !frodot_target_allowed(s->expr)) {
+                error_at(s->at, "Frodot may modify r.data only"); break;
+            }
             Value val = evaluate(runtime, env, s->expr2);
             if (!has_error) set_member_value(runtime, env, s->expr, val, s->at);
             release(val);
@@ -714,11 +782,18 @@ static Flow execute_inner(Runtime *runtime, Env *env, Statement *statement) {
         /* ── Variable resolve for S_ASSIGN ── */
         ValueType target = s->type;
         if (s->kind == S_ASSIGN) {
+            if (runtime->frodot_active && !strcmp(s->name, "r")) {
+                error_at(s->at, "Frodot cannot replace its sprite binding"); break;
+            }
             Variable *v = find_variable(env, s->name);
             if (!v) { error_at(s->at, "variable '%s' for assignment not found", s->name); break; }
             target = v->type;
         } else if (s->kind == S_DECLARE) {
+            if (runtime->frodot_active && !strcmp(s->name, "r")) {
+                error_at(s->at, "Frodot cannot replace its sprite binding"); break;
+            }
             Variable *v = find_local(env, s->name);
+            if (runtime->game_active && env == runtime->scene_env && v) continue;
             if (v && v->type != s->type) {
                 error_at(s->at, "variable '%s' is already declared as %s", s->name, type_label(v->type)); break;
             }
@@ -750,11 +825,259 @@ static Flow execute(Runtime *runtime, Env *env, Statement *statement) {
     runtime->block_depth--;
     return flow;
 }
+#ifdef _WIN32
+static void sian_clear_images(Runtime *runtime) {
+    for (size_t i = 0; i < runtime->image_count; i++) {
+        if (runtime->images[i].bitmap) GdipDisposeImage((GpImage *)runtime->images[i].bitmap);
+        if (runtime->images[i].stream) runtime->images[i].stream->lpVtbl->Release(runtime->images[i].stream);
+        release(runtime->images[i].sprite);
+    }
+    free(runtime->images);
+    runtime->images = NULL; runtime->image_count = 0; runtime->image_capacity = 0;
+}
+static int64_t rodot_layer(Value sprite) {
+    Value *data = rodot_field(sprite, "data");
+    Value *layer = data ? rodot_field(*data, "layer") : NULL;
+    return layer && layer->type == V_INT ? layer->as.integer : 0;
+}
+static void sian_paint_sprites(Runtime *runtime, HDC dc) {
+    if (!runtime || !runtime->scene_env) return;
+    Env *env = runtime->scene_env;
+    Value **sprites = resize(NULL, env->count * sizeof(Value *));
+    size_t count = 0;
+    for (size_t i = 0; i < env->count; i++)
+        if (rodot_field(env->vars[i].value, "_rodot_path")) sprites[count++] = &env->vars[i].value;
+    for (size_t i = 1; i < count; i++) {
+        Value *item = sprites[i]; size_t j = i;
+        while (j && rodot_layer(*sprites[j - 1]) > rodot_layer(*item)) {
+            sprites[j] = sprites[j - 1]; j--;
+        }
+        sprites[j] = item;
+    }
+    GpGraphics *graphics = NULL;
+    if (GdipCreateFromHDC(dc, &graphics) != Ok) { free(sprites); return; }
+    for (size_t i = 0; i < count; i++) {
+        Value sprite = *sprites[i];
+        Value *path = rodot_field(sprite, "_rodot_path");
+        Value *meta = rodot_field(sprite, "meta");
+        Value *data = rodot_field(sprite, "data");
+        if (!path || !meta || !data || path->type != V_STR || data->type != V_DICT) continue;
+        Value *visible = rodot_field(*data, "visible");
+        if (visible && visible->type == V_BOOL && !visible->as.boolean) continue;
+        Value *x = rodot_field(*data, "x"), *y = rodot_field(*data, "y");
+        Value *scale = rodot_field(*data, "scale");
+        Value *rotation = rodot_field(*data, "rotation");
+        Value *opacity = rodot_field(*data, "opacity");
+        Value *width = rodot_field(*meta, "width"), *height = rodot_field(*meta, "height");
+        if (!width || !height || width->type != V_INT || height->type != V_INT) continue;
+        double factor = scale && numeric(*scale) ? number(*scale) : 1.0;
+        double angle = rotation && numeric(*rotation) ? number(*rotation) : 0.0;
+        double alpha = opacity && numeric(*opacity) ? number(*opacity) : 1.0;
+        double px = x && numeric(*x) ? number(*x) : 0.0;
+        double py = y && numeric(*y) ? number(*y) : 0.0;
+        if (!isfinite(factor) || factor <= 0 || factor > 100 || !isfinite(angle) || fabs(angle) > 1000000 ||
+            !isfinite(alpha) || alpha < 0 || alpha > 1 || fabs(px) > 1000000 || fabs(py) > 1000000) continue;
+        GpBitmap *image = NULL;
+        IStream *stream = NULL;
+        int cached = 0;
+        for (size_t j = 0; j < runtime->image_count; j++)
+            if (runtime->images[j].sprite.as.dict == sprite.as.dict) {
+                image = runtime->images[j].bitmap; cached = 1; break;
+            }
+        if (!cached) {
+            FILE *file = rodot_open(path->as.string->text, "rb");
+            if (file) {
+                if (!fseek(file, 0, SEEK_END)) {
+                    long length = ftell(file);
+                    if (length > 24 && length <= (long)TEXT_LIMIT + (long)TEXT_LIMIT && !fseek(file, 0, SEEK_SET)) {
+                        unsigned char *bytes = resize(NULL, (size_t)length);
+                        if (fread(bytes, 1, (size_t)length, file) == (size_t)length) {
+                            stream = SHCreateMemStream(bytes, (UINT)length);
+                            if (stream && GdipCreateBitmapFromStream(stream, &image) != Ok) image = NULL;
+                        }
+                        free(bytes);
+                    }
+                }
+                fclose(file);
+            }
+            if (!image && stream) { stream->lpVtbl->Release(stream); stream = NULL; }
+            if (runtime->image_count == runtime->image_capacity) {
+                runtime->image_capacity = runtime->image_capacity ? runtime->image_capacity * 2 : 8;
+                runtime->images = resize(runtime->images, runtime->image_capacity * sizeof(SpriteBitmap));
+            }
+            runtime->images[runtime->image_count++] = (SpriteBitmap){retain(sprite), image, stream};
+        }
+        if (image) {
+            INT draw_width = (INT)((double)width->as.integer * factor);
+            INT draw_height = (INT)((double)height->as.integer * factor);
+            GpImageAttributes *attributes = NULL;
+            if (GdipCreateImageAttributes(&attributes) == Ok) {
+                ColorMatrix matrix = {{{1, 0, 0, 0, 0}, {0, 1, 0, 0, 0},
+                    {0, 0, 1, 0, 0}, {0, 0, 0, (REAL)alpha, 0}, {0, 0, 0, 0, 1}}};
+                GdipSetImageAttributesColorMatrix(attributes, ColorAdjustTypeBitmap, TRUE,
+                    &matrix, NULL, ColorMatrixFlagsDefault);
+                GdipTranslateWorldTransform(graphics, (REAL)(px + draw_width / 2.0),
+                    (REAL)(py + draw_height / 2.0), MatrixOrderAppend);
+                GdipRotateWorldTransform(graphics, (REAL)angle, MatrixOrderAppend);
+                GdipDrawImageRectRectI(graphics, (GpImage *)image, -draw_width / 2,
+                    -draw_height / 2, draw_width, draw_height, 0, 0,
+                    (INT)width->as.integer, (INT)height->as.integer, UnitPixel, attributes, NULL, NULL);
+                GdipResetWorldTransform(graphics);
+                GdipDisposeImageAttributes(attributes);
+            }
+        }
+    }
+    GdipDeleteGraphics(graphics);
+    free(sprites);
+}
+static void sian_paint_draws(Runtime *runtime, HDC dc) {
+    if (!runtime) return;
+    for (size_t i = 0; i < runtime->draw_count; i++) {
+        DrawCommand *command = &runtime->draws[i];
+        COLORREF color = RGB((command->color >> 16) & 255, (command->color >> 8) & 255, command->color & 255);
+        if (command->kind == 4) {
+            int length = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS,
+                command->label.as.string->text, -1, NULL, 0);
+            if (!length) continue;
+            wchar_t *wide = resize(NULL, (size_t)length * sizeof(wchar_t));
+            MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS,
+                command->label.as.string->text, -1, wide, length);
+            SetBkMode(dc, TRANSPARENT); SetTextColor(dc, color);
+            TextOutW(dc, command->x, command->y, wide, length - 1);
+            free(wide); continue;
+        }
+        HPEN pen = CreatePen(PS_SOLID, 1, color);
+        HGDIOBJ old_pen = SelectObject(dc, pen);
+        HBRUSH brush = CreateSolidBrush(color);
+        HGDIOBJ old_brush = SelectObject(dc, brush);
+        if (command->kind == 1)
+            Rectangle(dc, command->x, command->y, command->x + command->a, command->y + command->b);
+        else if (command->kind == 2)
+            Ellipse(dc, command->x - command->a, command->y - command->a,
+                command->x + command->a, command->y + command->a);
+        else if (command->kind == 3) {
+            MoveToEx(dc, command->x, command->y, NULL);
+            LineTo(dc, command->a, command->b);
+        }
+        SelectObject(dc, old_pen); SelectObject(dc, old_brush);
+        DeleteObject(pen); DeleteObject(brush);
+    }
+}
+static LRESULT CALLBACK sian_window_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam) {
+    if (message == WM_CLOSE) { DestroyWindow(hwnd); return 0; }
+    if (message == WM_DESTROY) { PostQuitMessage(0); return 0; }
+    if (message == WM_ERASEBKGND) return 1;
+    if (message == WM_PAINT) {
+        PAINTSTRUCT paint; HDC dc = BeginPaint(hwnd, &paint);
+        RECT rect; GetClientRect(hwnd, &rect);
+        FillRect(dc, &rect, (HBRUSH)GetStockObject(BLACK_BRUSH));
+        Runtime *runtime = (Runtime *)GetWindowLongPtrW(hwnd, GWLP_USERDATA);
+        sian_paint_sprites(runtime, dc);
+        sian_paint_draws(runtime, dc);
+        EndPaint(hwnd, &paint);
+        return 1;
+    }
+    return DefWindowProcW(hwnd, message, wparam, lparam);
+}
+#endif
+static void game_run(Runtime *runtime, const char *first, int width, int height, const char *title, Location at) {
+    if (runtime->game_active) { error_at(at, "game is already running"); return; }
+    Statement *scene = runtime->program;
+    while (scene && (scene->kind != S_SCENE || strcmp(scene->name, first))) scene = scene->next;
+    if (!scene) { error_at(at, "scene '%s' not found", first); return; }
+#ifdef _WIN32
+    const char *headless_flag = getenv("SIAN_HEADLESS");
+    int headless = headless_flag && !strcmp(headless_flag, "1");
+    static int registered;
+    HINSTANCE instance = GetModuleHandleW(NULL);
+    if (!headless && !registered) {
+        WNDCLASSW cls = {0}; cls.lpfnWndProc = sian_window_proc;
+        cls.hInstance = instance; cls.lpszClassName = L"SianLangGameWindow";
+        cls.hCursor = LoadCursorW(NULL, (LPCWSTR)IDC_ARROW);
+        if (!RegisterClassW(&cls)) { error_at(at, "cannot register game window"); return; }
+        registered = 1;
+    }
+    ULONG_PTR gdiplus_token = 0;
+    if (!headless) {
+        int title_length = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, title, -1, NULL, 0);
+        if (!title_length) { error_at(at, "invalid UTF-8 window title"); return; }
+        wchar_t *wide_title = resize(NULL, (size_t)title_length * sizeof(wchar_t));
+        MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, title, -1, wide_title, title_length);
+        RECT frame = {0, 0, width, height};
+        AdjustWindowRect(&frame, WS_OVERLAPPEDWINDOW, FALSE);
+        runtime->window = CreateWindowExW(0, L"SianLangGameWindow", wide_title,
+            WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT,
+            frame.right - frame.left, frame.bottom - frame.top,
+            NULL, NULL, instance, NULL);
+        free(wide_title);
+        if (!runtime->window) { error_at(at, "cannot create game window"); return; }
+        GdiplusStartupInput startup = {0}; startup.GdiplusVersion = 1;
+        if (GdiplusStartup(&gdiplus_token, &startup, NULL) != Ok) {
+            DestroyWindow(runtime->window); runtime->window = NULL;
+            error_at(at, "cannot initialize image renderer"); return;
+        }
+        SetWindowLongPtrW(runtime->window, GWLP_USERDATA, (LONG_PTR)runtime);
+        ShowWindow(runtime->window, SW_SHOW);
+    }
+    LARGE_INTEGER frequency, previous, now;
+    QueryPerformanceFrequency(&frequency); QueryPerformanceCounter(&previous);
+    runtime->game_active = 1;
+    int running = 1;
+    while (running && !has_error && !runtime->game_exit) {
+        for (size_t i = 0; i < runtime->draw_count; i++) release(runtime->draws[i].label);
+        runtime->draw_count = 0;
+        MSG message;
+        while (!headless && PeekMessageW(&message, NULL, 0, 0, PM_REMOVE)) {
+            if (message.message == WM_QUIT) { running = 0; break; }
+            TranslateMessage(&message); DispatchMessageW(&message);
+        }
+        if (!running) break;
+        QueryPerformanceCounter(&now);
+        runtime->delta_time = (double)(now.QuadPart - previous.QuadPart) / (double)frequency.QuadPart;
+        previous = now;
+        if (!runtime->scene_env) runtime->scene_env = new_env(runtime, runtime->global);
+        Flow flow = execute(runtime, runtime->scene_env, scene->body);
+        release(flow.value);
+        if (flow.kind != FLOW_NORMAL && flow.kind != FLOW_ERROR && !has_error)
+            error_at(scene->at, "scene cannot return or break");
+        if (runtime->next_scene && !has_error) {
+            const char *target = runtime->next_scene;
+            runtime->next_scene = NULL;
+            for (Statement *s = runtime->program; s; s = s->next)
+                if (s->kind == S_SCENE && !strcmp(s->name, target)) { scene = s; break; }
+            sian_clear_images(runtime);
+            runtime->scene_env->object.refs--;
+            runtime->scene_env = NULL;
+        }
+        if (!headless) {
+            InvalidateRect(runtime->window, NULL, FALSE);
+            UpdateWindow(runtime->window);
+        }
+        if (runtime->fps > 0) {
+            DWORD target_ms = (DWORD)(1000 / runtime->fps);
+            if (target_ms) Sleep(target_ms);
+        }
+    }
+    if (runtime->scene_env) { runtime->scene_env->object.refs--; runtime->scene_env = NULL; }
+    sian_clear_images(runtime);
+    for (size_t i = 0; i < runtime->draw_count; i++) release(runtime->draws[i].label);
+    runtime->draw_count = 0;
+    if (!headless && running) DestroyWindow(runtime->window);
+    runtime->window = NULL;
+    if (!headless) GdiplusShutdown(gdiplus_token);
+    runtime->game_active = 0;
+    runtime->game_exit = 0;
+#else
+    (void)runtime; (void)width; (void)height; (void)title;
+    error_at(at, "game windows are available on Windows only");
+#endif
+}
 static void run_program(Statement *program) {
-    Runtime runtime = {.program = program};
+    Runtime runtime = {.program = program, .fps = 60, .delta_time = 1.0 / 60.0};
     runtime.global = new_env(&runtime, NULL);
     Flow flow = execute(&runtime, runtime.global, program);
     release(flow.value);
+    free(runtime.draws);
     runtime.global->object.refs--;
     collect(&runtime, 1);
     if (live_strings || runtime.object_count) {

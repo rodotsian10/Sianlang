@@ -22,7 +22,7 @@ struct Expr {
 };
 typedef enum { S_DECLARE, S_ASSIGN, S_INDEX_ASSIGN, S_RETURN, S_EXPR, S_TRY,
     S_IF, S_WHILE, S_REPEAT, S_FOR, S_FUNCTION, S_BREAK, S_CONTINUE,
-    S_FJSON, S_FJSON_REPLACE, S_FJSON_ADD, S_FJSON_DELETE } StatementKind;
+    S_FJSON, S_FJSON_REPLACE, S_FJSON_ADD, S_FJSON_DELETE, S_SCENE, S_GAME_FPS, S_FRODOT } StatementKind;
 typedef struct NameList { char *name; Expr *default_value; int rest; struct NameList *next; } NameList;
 typedef struct Statement Statement;
 struct Statement {
@@ -68,7 +68,7 @@ static ValueType type_named(const char *name) {
     return V_VOID;
 }
 static int reserved(const char *name) {
-    static const char *names[] = {"if", "else", "while", "loop", "repeat", "for", "in", "def", "func", "f", "function",
+    static const char *names[] = {"if", "else", "while", "loop", "repeat", "for", "in", "def", "func", "f", "function", "scene",
         "return", "log", "input", "range", "time", "true", "false", "None", "and", "or", "break", "continue", "try", "catch"};
     if (type_named(name)) return 1;
     for (size_t i = 0; i < sizeof(names) / sizeof(*names); i++)
@@ -95,7 +95,13 @@ static int builtin_named(const char *name) {
     return !strcmp(name, "input") || !strcmp(name, "log") || !strcmp(name, "len") || !strcmp(name, "range") || !strcmp(name, "time") || !strcmp(name, "time.now") ||
         !strcmp(name, "abs") || !strcmp(name, "min") || !strcmp(name, "max") || !strcmp(name, "round") ||
         !strcmp(name, "random") || !strcmp(name, "random.int") || !strcmp(name, "random.float") || !strcmp(name, "random.choice") ||
-        !strcmp(name, "open") ||
+        !strcmp(name, "open") || !strcmp(name, "game") || !strcmp(name, "game.start") || !strcmp(name, "game.close") ||
+        !strcmp(name, "game.delta_time") || !strcmp(name, "scene") || !strcmp(name, "scene.change") ||
+        !strcmp(name, "key") || !strcmp(name, "key.down") ||
+        !strcmp(name, "rodot") || !strcmp(name, "rodot.create") || !strcmp(name, "rodot.load") || !strcmp(name, "rodot.save") ||
+        !strcmp(name, "draw") || !strcmp(name, "draw.rect") || !strcmp(name, "draw.circle") ||
+        !strcmp(name, "draw.line") || !strcmp(name, "draw.text") ||
+        !strcmp(name, "collision") ||
         (type_named(name) && strcmp(name, "var"));
 }
 
@@ -225,6 +231,29 @@ static Expr *parse_prefix(Parser *p) {
                 expr->text = arena_text(p->arena, "random.float", 12);
             } else if (expr->kind == E_NAME && !strcmp(expr->text, "random") && !strcmp(member->text, "choice")) {
                 expr->text = arena_text(p->arena, "random.choice", 13);
+            } else if (expr->kind == E_NAME && !strcmp(expr->text, "game") &&
+                (!strcmp(member->text, "start") || !strcmp(member->text, "close") || !strcmp(member->text, "delta_time"))) {
+                size_t length = strlen(member->text);
+                char *name = arena_alloc(p->arena, length + 6);
+                memcpy(name, "game.", 5); memcpy(name + 5, member->text, length + 1);
+                expr->text = name;
+            } else if (expr->kind == E_NAME && !strcmp(expr->text, "scene") && !strcmp(member->text, "change")) {
+                expr->text = arena_text(p->arena, "scene.change", 12);
+            } else if (expr->kind == E_NAME && !strcmp(expr->text, "key") && !strcmp(member->text, "down")) {
+                expr->text = arena_text(p->arena, "key.down", 8);
+            } else if (expr->kind == E_NAME && !strcmp(expr->text, "rodot") &&
+                (!strcmp(member->text, "create") || !strcmp(member->text, "load") || !strcmp(member->text, "save"))) {
+                size_t length = strlen(member->text);
+                char *name = arena_alloc(p->arena, length + 7);
+                memcpy(name, "rodot.", 6); memcpy(name + 6, member->text, length + 1);
+                expr->text = name;
+            } else if (expr->kind == E_NAME && !strcmp(expr->text, "draw") &&
+                (!strcmp(member->text, "rect") || !strcmp(member->text, "circle") ||
+                 !strcmp(member->text, "line") || !strcmp(member->text, "text"))) {
+                size_t length = strlen(member->text);
+                char *name = arena_alloc(p->arena, length + 6);
+                memcpy(name, "draw.", 5); memcpy(name + 5, member->text, length + 1);
+                expr->text = name;
             } else {
                 Expr *access = new_expr(p, E_MEMBER, expr->at); access->left = expr; access->text = member->text;
                 expression_height(p, access, expr->height); expr = access;
@@ -386,10 +415,25 @@ static Statement *parse_statement(Parser *p) {
         if (word(peek(p), "else")) { p->pos++; s->otherwise = parse_suite(p); }
         return s;
     }
+    if (word(token, "Frodot")) {
+        p->pos++;
+        Statement *s = new_statement(p, S_FRODOT, token->at);
+        s->expr = parse_expression(p, 0);
+        s->body = parse_suite(p);
+        return s;
+    }
     if (word(token, "Fjson")) {
         p->pos++;
         Statement *s = new_statement(p, S_FJSON, token->at);
         s->expr = parse_expression(p, 0);
+        s->body = parse_suite(p);
+        return s;
+    }
+    if (word(token, "scene") && p->tokens->items[p->pos + 1].kind == T_NAME) {
+        if (p->block_depth) syntax_error(p, token->at, "scene definitions must be at top level");
+        p->pos++;
+        Statement *s = new_statement(p, S_SCENE, token->at);
+        s->name = parse_name(p);
         s->body = parse_suite(p);
         return s;
     }
@@ -484,6 +528,30 @@ static Statement *parse_statement(Parser *p) {
             s = new_statement(p, S_EXPR, token->at);
             s->expr = parse_expression(p, 0);
             if (s->expr->kind != E_CALL) syntax_error(p, token->at, "expected a declaration, assignment, or function call");
+        }
+    } else if (word(token, "game") && p->tokens->items[p->pos + 1].kind == T_DOT &&
+               word(&p->tokens->items[p->pos + 2], "fps") && p->tokens->items[p->pos + 3].kind == T_EQUAL) {
+        p->pos += 4;
+        s = new_statement(p, S_GAME_FPS, token->at);
+        s->expr = parse_expression(p, 0);
+    } else if (token->kind == T_NAME && p->tokens->items[p->pos + 1].kind == T_DOT) {
+        Expr *target = parse_expression(p, 0);
+        if ((peek(p)->kind == T_EQUAL || is_compound_assign(peek(p)->kind)) && target->kind == E_MEMBER) {
+            s = new_statement(p, S_INDEX_ASSIGN, token->at);
+            s->expr = target;
+            TokenKind operation = peek(p)->kind; p->pos++;
+            if (operation == T_EQUAL) s->expr2 = parse_expression(p, 0);
+            else {
+                Expr *rhs = parse_expression(p, 0);
+                Expr *bin = new_expr(p, E_BINARY, token->at);
+                bin->left = target; bin->right = rhs;
+                bin->op = compound_assign_to_op(operation);
+                s->expr2 = bin;
+            }
+        } else {
+            s = new_statement(p, S_EXPR, token->at);
+            s->expr = target;
+            if (target->kind != E_CALL) syntax_error(p, token->at, "expected a function call or member assignment");
         }
     } else if (token->kind == T_NAME && (p->tokens->items[p->pos + 1].kind == T_EQUAL || is_compound_assign(p->tokens->items[p->pos + 1].kind))) {
         s = new_statement(p, S_ASSIGN, token->at); s->name = parse_name(p);
@@ -590,6 +658,11 @@ static Statement *parse_program(TokenList *tokens, Arena *arena) {
     Statement *head = NULL, **tail = &head;
     while (peek(&p)->kind != T_EOF) {
         Statement *s = parse_statement(&p);
+        if (s->kind == S_SCENE) {
+            for (Statement *prev = head; prev; prev = prev->next)
+                if (prev->kind == S_SCENE && !strcmp(prev->name, s->name))
+                    syntax_error(&p, s->at, "duplicate scene definition");
+        }
         if (s->kind == S_FUNCTION) {
             for (Statement *prev = head; prev; prev = prev->next)
                 if (prev->kind == S_FUNCTION && !strcmp(prev->name, s->name))

@@ -18,7 +18,7 @@ static Value builtin_value(Runtime *rt, const char *name) {
     static const char *names[] = {"log", "log.f", "input", "len", "range", "time.now",
         "int", "float", "str", "bool", "TF",
         "abs", "min", "max", "round",
-        "random.int", "random.float", "random.choice", "open"};
+        "random.int", "random.float", "random.choice", "open", "game.start", "game.close", "game.delta_time", "scene.change", "key.down", "rodot.create", "rodot.load", "rodot.save", "draw.rect", "draw.circle", "draw.line", "draw.text", "collision"};
     Closure *fn = new_object(rt, sizeof(*fn), G_FUNCTION);
     for (size_t i = 0; i < sizeof(names) / sizeof(*names); i++) if (!strcmp(name, names[i])) { fn->builtin = names[i]; break; }
     Value result = {.type = V_FUNCTION}; result.as.function = fn; return result;
@@ -310,6 +310,143 @@ static Value call_builtin(Runtime *rt, const char *name, Arguments *args, Locati
         error_at(at, "'%s' does not accept named arguments", name); return nothing();
     }
     if (!strcmp(name, "input")) return input_value(args->values, args->count, at);
+    if (!strcmp(name, "rodot.create")) return rodot_create(args->values, args->count, at);
+    if (!strcmp(name, "rodot.load")) return rodot_load(rt, args->values, args->count, at);
+    if (!strcmp(name, "rodot.save")) return rodot_save(rt, args->values, args->count, at);
+    if (!strcmp(name, "collision")) {
+        if (args->count != 2 || !rodot_field(args->values[0], "_rodot_path") ||
+            !rodot_field(args->values[1], "_rodot_path")) {
+            error_at(at, "collision expects two loaded rodot sprites"); return nothing();
+        }
+        double box[2][4] = {{0}};
+        for (int i = 0; i < 2; i++) {
+            Value *data = rodot_field(args->values[i], "data");
+            Value *collision_data = data ? rodot_field(*data, "collision") : NULL;
+            Value *enabled = collision_data ? rodot_field(*collision_data, "enabled") : NULL;
+            if (!enabled || enabled->type != V_BOOL || !enabled->as.boolean) return boolean_value(0);
+            Value *x = rodot_field(*data, "x"), *y = rodot_field(*data, "y");
+            Value *scale = rodot_field(*data, "scale");
+            Value *cx = rodot_field(*collision_data, "x"), *cy = rodot_field(*collision_data, "y");
+            Value *width = rodot_field(*collision_data, "width"), *height = rodot_field(*collision_data, "height");
+            if (!x || !y || !scale || !cx || !cy || !width || !height ||
+                !numeric(*x) || !numeric(*y) || !numeric(*scale) || !numeric(*cx) || !numeric(*cy) ||
+                !numeric(*width) || !numeric(*height) || number(*scale) <= 0 || number(*width) < 0 || number(*height) < 0) {
+                error_at(at, "invalid rodot collision rectangle"); return nothing();
+            }
+            box[i][0] = number(*x) + number(*cx) * number(*scale);
+            box[i][1] = number(*y) + number(*cy) * number(*scale);
+            box[i][2] = box[i][0] + number(*width) * number(*scale);
+            box[i][3] = box[i][1] + number(*height) * number(*scale);
+        }
+        return boolean_value(box[0][0] < box[1][2] && box[0][2] > box[1][0] &&
+            box[0][1] < box[1][3] && box[0][3] > box[1][1]);
+    }
+    if (!strncmp(name, "draw.", 5)) {
+        if (!rt->game_active) { error_at(at, "draw requires an active game"); return nothing(); }
+        int kind = !strcmp(name, "draw.rect") ? 1 : !strcmp(name, "draw.circle") ? 2 :
+            !strcmp(name, "draw.line") ? 3 : !strcmp(name, "draw.text") ? 4 : 0;
+        size_t base = kind == 2 || kind == 4 ? 3 : 4;
+        if (!kind || (args->count != base && args->count != base + 1)) {
+            error_at(at, "%s expects %zu coordinates/text arguments and optional color", name, base);
+            return nothing();
+        }
+        if (kind == 4 && args->values[0].type != V_STR) {
+            error_at(at, "draw.text requires a str first argument"); return nothing();
+        }
+        for (size_t i = kind == 4 ? 1 : 0; i < base; i++)
+            if (!numeric(args->values[i]) || !isfinite(number(args->values[i])) || fabs(number(args->values[i])) > 1000000) {
+                error_at(at, "draw coordinates must be finite numbers within one million"); return nothing();
+            }
+        uint32_t color = 0xffffff;
+        if (args->count == base + 1) {
+            Value c = args->values[base];
+            if (c.type != V_STR || c.as.string->length != 7 || c.as.string->text[0] != '#') {
+                error_at(at, "draw color must be '#RRGGBB'"); return nothing();
+            }
+            char *end = NULL;
+            unsigned long parsed = strtoul(c.as.string->text + 1, &end, 16);
+            if (!end || *end || parsed > 0xffffff) {
+                error_at(at, "draw color must be '#RRGGBB'"); return nothing();
+            }
+            color = (uint32_t)parsed;
+        }
+        if (rt->draw_count == 4096) { error_at(at, "too many draw commands in one frame"); return nothing(); }
+        if (rt->draw_count == rt->draw_capacity) {
+            rt->draw_capacity = rt->draw_capacity ? rt->draw_capacity * 2 : 16;
+            rt->draws = resize(rt->draws, rt->draw_capacity * sizeof(DrawCommand));
+        }
+        DrawCommand *command = &rt->draws[rt->draw_count++];
+        *command = (DrawCommand){.kind = kind, .color = color, .label = nothing()};
+        if (kind == 4) {
+            command->label = retain(args->values[0]);
+            command->x = (int)number(args->values[1]); command->y = (int)number(args->values[2]);
+        } else {
+            command->x = (int)number(args->values[0]); command->y = (int)number(args->values[1]);
+            command->a = (int)number(args->values[2]);
+            if (kind != 2) command->b = (int)number(args->values[3]);
+        }
+        return nothing();
+    }
+    if (!strcmp(name, "game.start")) {
+        if ((args->count != 1 && args->count != 3 && args->count != 4) || args->values[0].type != V_STR) {
+            error_at(at, "game.start expects scene name [, width, height [, title]]"); return nothing();
+        }
+        int width = 800, height = 600;
+        if (args->count >= 3) {
+            if (args->values[1].type != V_INT || args->values[2].type != V_INT ||
+                args->values[1].as.integer < 64 || args->values[1].as.integer > 4096 ||
+                args->values[2].as.integer < 64 || args->values[2].as.integer > 4096) {
+                error_at(at, "game window width and height must be ints from 64 to 4096"); return nothing();
+            }
+            width = (int)args->values[1].as.integer; height = (int)args->values[2].as.integer;
+        }
+        if (args->count == 4 && args->values[3].type != V_STR) {
+            error_at(at, "game window title must be str"); return nothing();
+        }
+        const char *title = args->count == 4 ? args->values[3].as.string->text : "SianLang Game";
+        game_run(rt, args->values[0].as.string->text, width, height, title, at);
+        return nothing();
+    }
+    if (!strcmp(name, "game.close")) {
+        if (args->count || !rt->game_active) { error_at(at, "game.close requires an active game and no arguments"); return nothing(); }
+        rt->game_exit = 1;
+        return nothing();
+    }
+    if (!strcmp(name, "scene.change")) {
+        if (args->count != 1 || args->values[0].type != V_STR || !rt->game_active) {
+            error_at(at, "scene.change requires an active game and a scene name"); return nothing();
+        }
+        const char *target = args->values[0].as.string->text;
+        Statement *scene = rt->program;
+        while (scene && (scene->kind != S_SCENE || strcmp(scene->name, target))) scene = scene->next;
+        if (!scene) { error_at(at, "scene '%s' not found", target); return nothing(); }
+        rt->next_scene = scene->name;
+        return nothing();
+    }
+    if (!strcmp(name, "game.delta_time")) {
+        if (args->count) { error_at(at, "game.delta_time expects no arguments"); return nothing(); }
+        return decimal_value(rt->delta_time, at);
+    }
+    if (!strcmp(name, "key.down")) {
+        if (args->count != 1 || args->values[0].type != V_STR) {
+            error_at(at, "key.down expects one key name"); return nothing();
+        }
+#ifdef _WIN32
+        const char *key = args->values[0].as.string->text;
+        int code = 0;
+        if (!strcmp(key, "left")) code = VK_LEFT;
+        else if (!strcmp(key, "right")) code = VK_RIGHT;
+        else if (!strcmp(key, "up")) code = VK_UP;
+        else if (!strcmp(key, "down")) code = VK_DOWN;
+        else if (!strcmp(key, "enter")) code = VK_RETURN;
+        else if (!strcmp(key, "space")) code = VK_SPACE;
+        else if (strlen(key) == 1 && ascii_letter((unsigned char)key[0])) code = toupper((unsigned char)key[0]);
+        if (!code) { error_at(at, "unknown key '%s'", key); return nothing(); }
+        return boolean_value(rt->game_active && GetForegroundWindow() == rt->window && (GetAsyncKeyState(code) & 0x8000) != 0);
+#else
+        error_at(at, "key.down is available on Windows only"); return nothing();
+#endif
+    }
     if (!strcmp(name, "range")) {
         if (args->count < 1 || args->count > 3) { error_at(at, "range expects 1 to 3 int arguments"); return nothing(); }
         int64_t start = 0, stop = 0, step = 1;

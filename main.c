@@ -1,4 +1,4 @@
-/* Keep the original one-command build: gcc main.c -o Sianlang.exe */
+/* Build on Windows with: gcc main.c -o Sianlang.exe -lgdi32 -lgdiplus -lshlwapi */
 #include "src/common.h"
 #include "src/lexer.h"
 #include "src/parser.h"
@@ -6,7 +6,7 @@
 
 int main(int argc, char **argv) {
     if (argc == 2 && strcmp(argv[1], "--version") == 0) {
-        puts("SianLang 0.4.3");
+        puts("SianLang 0.5.0");
         return 0;
     }
     if (argc != 2) {

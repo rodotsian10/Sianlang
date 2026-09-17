@@ -10,5 +10,8 @@
   "For loop": {"prefix": "for", "body": ["for ${1:item} in ${2:items}", "    ${0:log(item)}"], "description": "For loop over sequence"}
   ,"Fjson block": {"prefix": "Fjson", "body": ["Fjson \"${1:save.json}\"", "    replace j.${2:key} = ${3:value}", "    ${0:log(j)}"], "description": "Load, edit and atomically save JSON data"},
   "List methods": {"prefix": "append", "body": ["${1:items}.append(${2:value})", "${0}"], "description": "Append a value to a list"},
-  "File read": {"prefix": "readfile", "body": ["var ${1:file} = open(\"${2:file.txt}\", \"r\")", "var ${1:file}_text = ${1:file}.read()", "${1:file}.close()", "${0}"], "description": "Read a file"}
+  "File read": {"prefix": "readfile", "body": ["var ${1:file} = open(\"${2:file.txt}\", \"r\")", "var ${1:file}_text = ${1:file}.read()", "${1:file}.close()", "${0}"], "description": "Read a file"},
+  "Game scenes": {"prefix": "game", "body": ["game.fps = 60", "game.start(\"title\", 800, 600, \"My Game\")", "", "scene title", "    ${1:draw.text(\"Press Enter\", 100, 100)}", "    if key.down(\"enter\")", "        scene.change(\"play\")", "", "scene play", "    ${0:game.close()}"], "description": "Start a scene-based game"},
+  "Frodot block": {"prefix": "Frodot", "body": ["Frodot ${1:sprite}", "    replace r.data.${2:x} = ${3:100}", "    ${0}"], "description": "Temporarily edit a loaded sprite"},
+  "Rodot create": {"prefix": "rodot.create", "body": ["rodot.create(\"${1:player.png}\", \"${2:player.rodot}\")"], "description": "Bundle a PNG with sprite metadata"}
 }

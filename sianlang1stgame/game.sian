@@ -1,0 +1,39 @@
+|| SianLang first mini game.
+|| Move the player with the arrow keys and touch the target.
+
+game.fps = 60
+game.start("play", 640, 480, "SianLang 1st Game")
+
+scene play
+    var player = rodot.load("sianlang1stgame/player.rodot")
+    var target = rodot.load("sianlang1stgame/player.rodot")
+    var score = 0
+
+    player.x = 100
+    player.y = 190
+    player.scale = 0.5
+    player.speed = 5
+
+    target.x = 470
+    target.y = 190
+    target.scale = 0.35
+    target.layer = -1
+
+    if key.down("right")
+        player.x += player.speed
+    if key.down("left")
+        player.x -= player.speed
+    if key.down("up")
+        player.y -= player.speed
+    if key.down("down")
+        player.y += player.speed
+    if collision(player, target)
+        score = 1
+
+    draw.text("SianLang 1st Game", 20, 20, "#ffffff")
+    draw.text("Arrow keys: move   Q: quit", 20, 50, "#cccccc")
+    draw.text("Score: " + str(score), 20, 80, "#ffff00")
+    draw.rect(0, 430, 640, 2, "#444444")
+
+    if key.down("q")
+        game.close()

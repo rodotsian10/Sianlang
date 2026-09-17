@@ -963,6 +963,40 @@ static void sian_paint_draws(Runtime *runtime, HDC dc) {
         DeleteObject(pen); DeleteObject(brush);
     }
 }
+static void sian_release_backbuffer(Runtime *runtime) {
+    if (!runtime) return;
+    if (runtime->back_dc) {
+        if (runtime->back_old_bitmap)
+            SelectObject(runtime->back_dc, runtime->back_old_bitmap);
+        if (runtime->back_bitmap) DeleteObject(runtime->back_bitmap);
+        DeleteDC(runtime->back_dc);
+    }
+    runtime->back_dc = NULL;
+    runtime->back_bitmap = NULL;
+    runtime->back_old_bitmap = NULL;
+    runtime->back_width = 0;
+    runtime->back_height = 0;
+}
+static int sian_ensure_backbuffer(Runtime *runtime, HDC window_dc, int width, int height) {
+    if (!runtime || width <= 0 || height <= 0) return 0;
+    if (runtime->back_dc && runtime->back_width == width && runtime->back_height == height)
+        return 1;
+    sian_release_backbuffer(runtime);
+    HDC memory_dc = CreateCompatibleDC(window_dc);
+    if (!memory_dc) return 0;
+    HBITMAP bitmap = CreateCompatibleBitmap(window_dc, width, height);
+    if (!bitmap) { DeleteDC(memory_dc); return 0; }
+    HGDIOBJ old_bitmap = SelectObject(memory_dc, bitmap);
+    if (!old_bitmap || old_bitmap == (HGDIOBJ)(intptr_t)-1) {
+        DeleteObject(bitmap); DeleteDC(memory_dc); return 0;
+    }
+    runtime->back_old_bitmap = old_bitmap;
+    runtime->back_dc = memory_dc;
+    runtime->back_bitmap = bitmap;
+    runtime->back_width = width;
+    runtime->back_height = height;
+    return 1;
+}
 static LRESULT CALLBACK sian_window_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam) {
     if (message == WM_CLOSE) { DestroyWindow(hwnd); return 0; }
     if (message == WM_DESTROY) { PostQuitMessage(0); return 0; }
@@ -970,10 +1004,14 @@ static LRESULT CALLBACK sian_window_proc(HWND hwnd, UINT message, WPARAM wparam,
     if (message == WM_PAINT) {
         PAINTSTRUCT paint; HDC dc = BeginPaint(hwnd, &paint);
         RECT rect; GetClientRect(hwnd, &rect);
-        FillRect(dc, &rect, (HBRUSH)GetStockObject(BLACK_BRUSH));
         Runtime *runtime = (Runtime *)GetWindowLongPtrW(hwnd, GWLP_USERDATA);
-        sian_paint_sprites(runtime, dc);
-        sian_paint_draws(runtime, dc);
+        int width = rect.right - rect.left, height = rect.bottom - rect.top;
+        HDC frame_dc = sian_ensure_backbuffer(runtime, dc, width, height)
+            ? runtime->back_dc : dc;
+        FillRect(frame_dc, &rect, (HBRUSH)GetStockObject(BLACK_BRUSH));
+        sian_paint_sprites(runtime, frame_dc);
+        sian_paint_draws(runtime, frame_dc);
+        if (frame_dc != dc) BitBlt(dc, 0, 0, width, height, frame_dc, 0, 0, SRCCOPY);
         EndPaint(hwnd, &paint);
         return 1;
     }
@@ -1068,6 +1106,7 @@ static void game_run(Runtime *runtime, const char *first, int width, int height,
     }
     if (runtime->scene_env) { runtime->scene_env->object.refs--; runtime->scene_env = NULL; }
     sian_clear_images(runtime);
+    sian_release_backbuffer(runtime);
     for (size_t i = 0; i < runtime->draw_count; i++) release(runtime->draws[i].label);
     runtime->draw_count = 0;
     if (!headless && running) DestroyWindow(runtime->window);

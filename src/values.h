@@ -41,6 +41,10 @@ typedef struct {
     size_t draw_count, draw_capacity;
 #ifdef _WIN32
     HWND window;
+    HDC back_dc;
+    HBITMAP back_bitmap;
+    HGDIOBJ back_old_bitmap;
+    int back_width, back_height;
     SpriteBitmap *images;
     size_t image_count, image_capacity;
 #endif

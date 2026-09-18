@@ -47,7 +47,7 @@ elif mode == 'publish':
     if any(r['tag_name'] == f'v{version}' for r in releases):
         raise SystemExit('Release already exists; refusing to overwrite it.')
     release = request('POST', '/releases', {'tag_name': f'v{version}', 'target_commitish': commit,
-        'name': f'SianLang {version} — Windows x64', 'draft': True, 'prerelease': True,
+        'name': f'SianLang {version} — Windows x64', 'draft': True, 'prerelease': False,
         'body': (ROOT / '배포/release-notes.md').read_text(encoding='utf-8')})
     print(f'Created draft release {release["id"]}')
     dist = ROOT / 'dist' / version
@@ -57,6 +57,14 @@ elif mode == 'publish':
         print(f'Uploaded {name} ({asset["size"]} bytes)')
     published = request('PATCH', f'/releases/{release["id"]}', {'draft': False})
     print(published['html_url'])
+elif mode == 'promote':
+    version = json.loads((ROOT / 'sianlang-vscode/package.json').read_text(encoding='utf-8'))['version']
+    release = request('GET', f'/releases/tags/v{version}')
+    if release['draft']:
+        raise SystemExit('Draft release must be published before promotion.')
+    promoted = request('PATCH', f'/releases/{release["id"]}', {'prerelease': False})
+    print(json.dumps({'html_url': promoted['html_url'], 'draft': promoted['draft'],
+                      'prerelease': promoted['prerelease']}))
 elif mode == 'pages':
     repo = request('GET', '')
     if repo.get('has_pages'):

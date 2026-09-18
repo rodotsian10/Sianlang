@@ -1,10 +1,12 @@
-# SianLang Language Support 0.4.1
+# SianLang Language Support 0.5.0
 
 Syntax highlighting, indentation, file icons, and interactive execution for `.sian` files.
 
+`.rodot` files open in the built-in Rodot editor in VS Code. It previews the PNG and lets you edit the `data` JSON. Press Ctrl+S to save; the image, name and original dimensions are preserved. Close and reopen the game to load saved file changes.
+
 ## Run a file
 
-1. Download `sianlang-vscode-0.4.1.vsix`. It includes the Windows x64 interpreter; no compiler, Python, or Node.js installation is required.
+1. Download `sianlang-vscode-0.5.0.vsix`. It includes the Windows x64 interpreter; no compiler, Python, or Node.js installation is required.
 2. Install it using VS Code **Extensions: Install from VSIX...**.
 3. Open a saved local `.sian` file in a trusted workspace. Standalone files also work.
 4. Press the ▶ run button in the editor title bar. F6 and **SianLang: Run File** do the same thing.

@@ -1,6 +1,7 @@
 const vscode = require('vscode');
 const fs = require('fs');
 const path = require('path');
+const { registerRodotEditor } = require('./rodot-editor');
 
 function activate(context) {
   const runFile = vscode.commands.registerCommand('sianlang.runFile', async () => {
@@ -65,6 +66,7 @@ function activate(context) {
   });
 
   context.subscriptions.push(runFile);
+  registerRodotEditor(vscode, context);
 }
 
 function deactivate() {}

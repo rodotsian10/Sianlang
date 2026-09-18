@@ -13,6 +13,7 @@ async function scenario(options = {}) {
   const api = {
     commands: { registerCommand: (_, cb) => { callback = cb; return {}; } },
     window: {
+      registerCustomEditorProvider: () => ({}),
       activeTextEditor: options.noEditor ? undefined : { document: {
         languageId: 'sianlang', uri: { scheme: options.remote ? 'vscode-vfs' : 'file' }, fileName: file,
         isUntitled: !!options.untitled,
@@ -29,6 +30,7 @@ async function scenario(options = {}) {
       getConfiguration: () => ({ get: () => options.configured || '' })
     },
     ProcessExecution: class { constructor(command, args, options) { Object.assign(this, { command, args, options }); } },
+    EventEmitter: class { constructor() { this.event = () => {}; } fire() {} },
     Task: class { constructor(definition, scope, name, source, execution) { Object.assign(this, { definition, scope, name, source, execution }); } },
     TaskRevealKind: { Always: 1 }, TaskPanelKind: { Dedicated: 2 }, TaskScope: { Global: 1 },
     tasks: { executeTask: async task => {
@@ -41,7 +43,7 @@ async function scenario(options = {}) {
   vm.runInNewContext(source, {
     module,
     process: { platform: options.linux ? 'linux' : 'win32', arch: 'x64' },
-    require: name => name === 'vscode' ? api : name === 'fs' ? {
+    require: name => name === './rodot-editor' ? require(path.join(root, 'sianlang-vscode', 'rodot-editor.js')) : name === 'vscode' ? api : name === 'fs' ? {
       statSync: candidate => {
         if (options.missing) throw new Error('missing');
         return { isFile: () => !options.directory };

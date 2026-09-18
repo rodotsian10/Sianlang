@@ -50,7 +50,7 @@ for extension, content_type in [('json', 'application/json'), ('js', 'applicatio
                                  ('exe', 'application/octet-stream'), ('vsixmanifest', 'text/xml')]:
     ET.SubElement(content_types, 'Default', Extension=extension, ContentType=content_type)
 
-files = ['package.json', 'extension.js', 'language-configuration.json', 'README.md', 'icon.png',
+files = ['package.json', 'extension.js', 'rodot-editor.js', 'language-configuration.json', 'README.md', 'icon.png',
          'syntaxes/sianlang.tmLanguage.json', 'icons/sianlang-file.svg', 'icons/sianlang-icon-theme.json',
          'docs/grammar.md', 'snippets/sianlang.json', 'bin/win32-x64/Sianlang.exe', 'LICENSE']
 (ROOT / 'docs').mkdir(exist_ok=True)

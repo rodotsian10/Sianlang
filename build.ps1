@@ -20,6 +20,8 @@ try {
         if ($LASTEXITCODE -ne 0) { throw 'Rodot decoder test failed' }
         & node tests/test_extension.js
         if ($LASTEXITCODE -ne 0) { throw 'Extension tests failed' }
+        & node tests/test_rodot_editor.js
+        if ($LASTEXITCODE -ne 0) { throw 'Rodot editor tests failed' }
     }
     Copy-Item -LiteralPath build/Sianlang.exe -Destination Sianlang.exe -Force
     Copy-Item -LiteralPath build/Sianlang.exe -Destination SianlangA.exe -Force

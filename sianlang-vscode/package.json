@@ -28,9 +28,18 @@
   "main": "./extension.js",
   "activationEvents": [
     "onLanguage:sianlang",
-    "onCommand:sianlang.runFile"
+    "onCommand:sianlang.runFile",
+    "onCustomEditor:sianlang.rodotEditor"
   ],
   "contributes": {
+    "customEditors": [
+      {
+        "viewType": "sianlang.rodotEditor",
+        "displayName": "SianLang Rodot",
+        "selector": [{ "filenamePattern": "*.rodot" }],
+        "priority": "default"
+      }
+    ],
     "iconThemes": [
       {
         "id": "sianlang-icons",

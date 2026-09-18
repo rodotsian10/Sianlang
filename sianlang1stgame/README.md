@@ -13,4 +13,6 @@ Set-Location D:\forSianlang\sianlang1stgame
 
 `player.rodot`은 `Conversion.sian`으로 `../sianlang-vscode/icon.png`를 변환한 결과물입니다. 이미 생성되어 있으므로 게임만 실행하면 됩니다. 다른 PNG를 쓰려면 변환 스크립트의 출력 파일명을 새 이름으로 바꾸세요. `rodot.create`는 기존 파일을 덮어쓰지 않습니다.
 
+VS Code에서 `player.rodot`을 클릭하면 이미지 미리보기와 `data` JSON 편집 화면이 열립니다. 값을 바꾼 뒤 Ctrl+S로 저장하고 게임을 다시 실행하면 저장한 값이 적용됩니다.
+
 장면 본문은 매 프레임 실행됩니다. `var` 선언은 첫 프레임에만 적용되고 값을 유지합니다. 초기 위치 설정은 `initialized` 조건으로 한 번만 실행하도록 했습니다. 이동량은 `game.delta_time()`을 곱해 초당 속도에 맞춥니다.

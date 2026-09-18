@@ -7,6 +7,7 @@ scene play
     frames += 1
     sprite.x += 1
     if frames == 3
-        rodot.save(sprite)
+        Frodot sprite
+            replace r.data.x = sprite.x
         log "saved"
         game.close()

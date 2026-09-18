@@ -1,8 +1,16 @@
-# SianLang 0.5.0 (development)
+# SianLang 0.5.1 (development)
+
+- `Frodot` saves JSON back into the `.rodot` file when its block finishes successfully.
+- `rodot.save = true|false` controls in-memory sprite state across scenes (default false); the old `rodot.save(sprite)` function is removed.
+- Carry-over is keyed by variable name and file path, so two loaded sprites remain independent.
+
+# SianLang 0.5.0 (development baseline)
 
 - Scene blocks, explicit scene changes, automatic Windows game window loop, configurable FPS, and real-time key state.
 - `.rodot` PNG + JSON files with `rodot.create/load/save`, source image dimensions, and temporary `Frodot` edits.
 - Automatic sprite rendering and `draw.rect/circle/line/text` commands; VS Code highlighting and snippets.
+- Double-buffered drawing and elapsed-time frame pacing; VS Code `.rodot` image/JSON editor.
+- Self-contained `sianlanggameex1` PNG conversion and game example in the portable ZIP.
 
 # SianLang 0.4.2
 
@@ -50,7 +58,7 @@
 - 클로저와 환경의 순환 참조 회수. 평가 중인 임시 함수 값도 보존.
 - 기존 예제 및 신규 기능 회귀 검증, Python 콘솔 출력 비교, AddressSanitizer 검증.
 
-게임 기능과 파일/키 입력 계획은 [게임기능-계획.md](게임기능-계획.md), 현재 문법은 [규칙서](설명서/시안랭-문법규칙서.md), 실행 예제는 [features-demo.sian](features-demo.sian)을 참고하세요.
+당시 게임 기능과 파일/키 입력 계획은 [보관된 계획서](history/게임기능-계획.md), 현재 문법은 [규칙서](설명서/시안랭-문법규칙서.md), 실행 예제는 [features-demo.sian](features-demo.sian)을 참고하세요.
 
 # SianLang 0.2.0 (이전 변경 기록)
 
@@ -82,4 +90,4 @@
 - `str s = input()` 뒤 `int n = s`는 오류. `int n = int(s)` 사용.
 - 잘못된 문법은 실행되지 않는 블록 안에서도 실행 전에 오류.
 
-원본 검토와 당시 실행 결과는 `review/검토보고서.md`, `results.json`에 보존했습니다. 현재 기대 결과는 `tests/test_runtime.py`에 있습니다. 원본 C 파일은 `review/main-before-fixes.c`에 보관했습니다.
+원본 검토와 당시 실행 결과는 `history/review/검토보고서.md`, `results.json`에 보존했습니다. 현재 기대 결과는 `tests/test_runtime.py`에 있습니다. 원본 C 파일은 `history/review/main-before-fixes.c`에 보관했습니다.

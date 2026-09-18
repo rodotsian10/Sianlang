@@ -27,7 +27,7 @@ generated = ROOT / 'build/icon.rodot'
 generated.unlink(missing_ok=True)
 sprite = run(ROOT / 'tests/rodot-smoke.sian')
 assert sprite.returncode == 0, sprite.stderr
-assert sprite.stdout == 'icon 128 128\n42 8 100\n44 False 128 128\n0\nTrue\nFalse\n44 False 100\n', sprite.stdout
+assert sprite.stdout == 'icon 128 128\n42 8 100\n44 False 128 128\n42\nTrue\nFalse\n44 False 100\n', sprite.stdout
 png = (ROOT / 'sianlang-vscode/icon.png').read_bytes()
 rodot = generated.read_bytes()
 assert rodot.startswith(png)
@@ -37,6 +37,7 @@ assert duplicate.returncode != 0 and 'already exists' in duplicate.stderr
 assert generated.read_bytes() == rodot
 immutable = run(ROOT / 'tests/rodot-immutable.sian')
 assert immutable.returncode != 0 and 'Frodot may modify r.data only' in immutable.stderr
+assert generated.read_bytes() == rodot
 bad = ROOT / 'build/bad.rodot'
 bad.write_bytes(rodot[:-1] + b'X')
 malformed = run(ROOT / 'tests/rodot-malformed.sian')
@@ -46,4 +47,12 @@ render = run(ROOT / 'tests/rodot-scene.sian')
 assert render.returncode == 0, render.stderr
 assert render.stdout == '59 20\n', render.stdout
 
-print('Game scenes, temporary Frodot edits, saved metadata, and PNG preservation passed.')
+kept = run(ROOT / 'tests/rodot-persistence.sian')
+assert kept.returncode == 0, kept.stderr
+assert kept.stdout == '111 222 True\n44 False\n', kept.stdout
+assert generated.read_bytes() == rodot
+reset = run(ROOT / 'tests/rodot-default-reset.sian')
+assert reset.returncode == 0, reset.stderr
+assert reset.stdout == '44 False\n', reset.stdout
+
+print('Game scenes, Frodot file edits, scene persistence switch, and PNG preservation passed.')

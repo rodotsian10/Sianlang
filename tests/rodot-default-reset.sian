@@ -1,0 +1,11 @@
+game.start("main")
+
+scene main
+    var player = rodot.load("build/icon.rodot")
+    player.x = 777
+    scene.change("play")
+
+scene play
+    var player = rodot.load("build/icon.rodot")
+    log player.x, rodot.save
+    game.close()

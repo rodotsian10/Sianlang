@@ -12,8 +12,9 @@ exports.run = async () => {
     assert.ok(extension, 'Packaged extension discovered');
     await extension.activate();
     assert.ok(extension.isActive);
-    assert.equal(extension.packageJSON.version, '0.3.1');
-    const uri = vscode.Uri.file(path.join(root, '배포', 'hello.sian'));
+    const expectedVersion = require(path.join(root, 'sianlang-vscode', 'package.json')).version;
+    assert.equal(extension.packageJSON.version, expectedVersion);
+    const uri = vscode.Uri.file(path.join(root, 'examples', 'hello.sian'));
     const document = await vscode.workspace.openTextDocument(uri);
     assert.equal(document.languageId, 'sianlang');
     await vscode.window.showTextDocument(document);

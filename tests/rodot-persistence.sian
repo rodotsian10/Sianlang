@@ -1,0 +1,22 @@
+rodot.save = true
+game.start("main")
+
+scene main
+    var player = rodot.load("build/icon.rodot")
+    var target = rodot.load("build/icon.rodot")
+    player.x = 111
+    target.x = 222
+    scene.change("play")
+
+scene play
+    var player = rodot.load("build/icon.rodot")
+    var target = rodot.load("build/icon.rodot")
+    log player.x, target.x, rodot.save
+    player.x = 333
+    rodot.save = false
+    scene.change("reset")
+
+scene reset
+    var player = rodot.load("build/icon.rodot")
+    log player.x, rodot.save
+    game.close()

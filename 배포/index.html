@@ -13,9 +13,10 @@
 <p>쉬운 문법과 직관적인 가동성을 갖추고 나만의 게임을 손쉽게 만들 수 있도록 설계된 2D 게임 제작 특화 프로그래밍 언어입니다.</p>
 <nav aria-label="메뉴 및 다운로드">
 <a href="SianLang-{{version}}-windows-x64.zip" download>Windows 패키지 다운로드</a>
+<a href="sianlang-vscode-{{version}}.vsix" download>VS Code 확장 다운로드</a>
 <a href="commands.html">📖 명령어 사전 보기</a>
 </nav>
-<p>ZIP: 실행기 + 확장 + 게임 예제 + Fjson 세이브 예제 + 문법 안내서</p>
+<p>ZIP: 실행기 + 확장 + NEON STAR RUN 게임 + PNG→rodot 변환 예제 + Fjson 예제 + 문법 안내서</p>
 <pre><code>str name = "SianLang"
 log.f("Hello, {name}!")
 
@@ -26,7 +27,7 @@ Fjson "save.json"
 <section><h2>VS Code에서 시작하기</h2><ol><li>VSIX 파일을 다운로드합니다.</li><li>VS Code 확장 화면의 … → Install from VSIX...로 설치합니다.</li><li>.sian 파일을 저장하고 F6을 누릅니다.</li></ol></section>
 <section><h2>나만의 .sian 아이콘</h2><p>명령 팔레트에서 Preferences: File Icon Theme → SianLang File Icons를 선택하세요.</p><p>파일 아이콘 테마는 한 번에 하나만 선택할 수 있습니다.</p></section>
 </div>
-<section><h2>이번 버전(v{{version}}) 주요 기능</h2><p>Fjson 세이브 데이터 조작 블록(replace·add·delete), 컬렉션(list·tuple·dict), 인덱스 대입, list/dict 메서드, UTF-8 문자열 인덱싱 및 순회, 수학/난수 내장함수, 파일 입출력(open/read/write/close), try/catch 예외처리를 지원합니다. 향후 2D 게임 전용 창 및 실시간 키 입력 기능이 탑재될 예정입니다.</p></section>
+<section><h2>이번 버전(v{{version}}) 주요 기능</h2><p>장면 전환, 게임 창, 실시간 키 입력, draw 그리기 명령, PNG와 JSON을 담는 rodot 스프라이트, Frodot의 파일 JSON 자동 저장과 rodot.save 설정을 지원합니다. VS Code에서 rodot 이미지와 data JSON을 보고 편집할 수 있습니다. 기존 Fjson·컬렉션·파일 입출력 기능도 사용할 수 있습니다.</p></section>
 </main>
 <footer>배포 파일 확인: <a href="SHA256SUMS.txt">SHA-256 체크섬</a> · 개발 중인 언어이며 실행 파일은 아직 서명되지 않았습니다.</footer>
 </html>

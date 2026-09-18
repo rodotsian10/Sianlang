@@ -183,6 +183,7 @@ static Value evaluate_inner(Runtime *runtime, Env *env, Expr *expr) {
         case E_BOOL: return boolean_value(expr->integer != 0);
         case E_STRING: return text_value(expr->text, strlen(expr->text), expr->at);
         case E_NAME: {
+            if (!strcmp(expr->text, "rodot.save")) return boolean_value(runtime->rodot_save_enabled);
             Variable *v = find_variable(env, expr->text);
             if (!v && (builtin_named(expr->text) || !strcmp(expr->text, "log.f"))) return builtin_value(runtime, expr->text);
             if (!v) { error_at(expr->at, "variable '%s' not found", expr->text); return nothing(); }
@@ -476,6 +477,13 @@ static Flow execute_inner(Runtime *runtime, Env *env, Statement *statement) {
             if (!has_error) runtime->fps = (int)value.as.integer;
             release(value); continue;
         }
+        if (s->kind == S_RODOT_SAVE) {
+            Value value = evaluate(runtime, env, s->expr);
+            if (!has_error && value.type != V_BOOL)
+                error_at(s->at, "rodot.save must be true or false");
+            if (!has_error) runtime->rodot_save_enabled = value.as.boolean;
+            release(value); continue;
+        }
         if (s->kind == S_FUNCTION) {
             Variable *previous = find_local(env, s->name);
             if (previous && previous->type != V_ANY && previous->type != V_FUNCTION) {
@@ -611,6 +619,12 @@ static Flow execute_inner(Runtime *runtime, Env *env, Statement *statement) {
             runtime->frodot_active = 1;
             Flow flow = execute(runtime, local, s->body);
             runtime->frodot_active = previous;
+            if (flow.kind == FLOW_NORMAL && !has_error && !runtime->next_scene && !runtime->game_exit) {
+                Variable *binding = find_local(local, "r");
+                Value argument = binding->value;
+                Value result = rodot_write_file(runtime, &argument, 1, s->at);
+                release(result);
+            }
             local->object.refs--;
             if (flow.kind != FLOW_NORMAL) return flow;
             continue;
@@ -798,7 +812,14 @@ static Flow execute_inner(Runtime *runtime, Env *env, Statement *statement) {
                 error_at(s->at, "variable '%s' is already declared as %s", s->name, type_label(v->type)); break;
             }
         }
+        const char *previous_rodot_name = runtime->loading_rodot_name;
+        if (runtime->game_active && env == runtime->scene_env &&
+            (s->kind == S_DECLARE || s->kind == S_ASSIGN) && s->expr &&
+            s->expr->kind == E_CALL && s->expr->left->kind == E_NAME &&
+            !strcmp(s->expr->left->text, "rodot.load"))
+            runtime->loading_rodot_name = s->name;
         Value value = evaluate(runtime, env, s->expr);
+        runtime->loading_rodot_name = previous_rodot_name;
         if (has_error) { release(value); break; }
         if (s->kind == S_RETURN) return (Flow){FLOW_RETURN, value};
         if (s->kind == S_DECLARE || s->kind == S_ASSIGN) {
@@ -1017,6 +1038,35 @@ static LRESULT CALLBACK sian_window_proc(HWND hwnd, UINT message, WPARAM wparam,
     }
     return DefWindowProcW(hwnd, message, wparam, lparam);
 }
+static void sian_clear_saved_rodots(Runtime *runtime) {
+    for (size_t i = 0; i < runtime->saved_rodot_count; i++)
+        release(runtime->saved_rodots[i].sprite);
+    free(runtime->saved_rodots);
+    runtime->saved_rodots = NULL;
+    runtime->saved_rodot_count = 0;
+    runtime->saved_rodot_capacity = 0;
+}
+static void sian_save_scene_rodots(Runtime *runtime) {
+    Env *env = runtime->scene_env;
+    if (!env) return;
+    for (size_t i = 0; i < env->count; i++) {
+        Value sprite = env->vars[i].value;
+        if (!rodot_field(sprite, "_rodot_path")) continue;
+        size_t slot = 0;
+        while (slot < runtime->saved_rodot_count &&
+            strcmp(runtime->saved_rodots[slot].name, env->vars[i].name)) slot++;
+        if (slot == runtime->saved_rodot_count) {
+            if (slot == runtime->saved_rodot_capacity) {
+                runtime->saved_rodot_capacity = runtime->saved_rodot_capacity
+                    ? runtime->saved_rodot_capacity * 2 : 8;
+                runtime->saved_rodots = resize(runtime->saved_rodots,
+                    runtime->saved_rodot_capacity * sizeof(SavedRodot));
+            }
+            runtime->saved_rodot_count++;
+        } else release(runtime->saved_rodots[slot].sprite);
+        runtime->saved_rodots[slot] = (SavedRodot){env->vars[i].name, retain(sprite)};
+    }
+}
 #endif
 static void game_run(Runtime *runtime, const char *first, int width, int height, const char *title, Location at) {
     if (runtime->game_active) { error_at(at, "game is already running"); return; }
@@ -1083,6 +1133,8 @@ static void game_run(Runtime *runtime, const char *first, int width, int height,
             runtime->next_scene = NULL;
             for (Statement *s = runtime->program; s; s = s->next)
                 if (s->kind == S_SCENE && !strcmp(s->name, target)) { scene = s; break; }
+            if (runtime->rodot_save_enabled) sian_save_scene_rodots(runtime);
+            else sian_clear_saved_rodots(runtime);
             sian_clear_images(runtime);
             runtime->scene_env->object.refs--;
             runtime->scene_env = NULL;
@@ -1105,6 +1157,8 @@ static void game_run(Runtime *runtime, const char *first, int width, int height,
         }
     }
     if (runtime->scene_env) { runtime->scene_env->object.refs--; runtime->scene_env = NULL; }
+    sian_clear_saved_rodots(runtime);
+    runtime->rodot_save_enabled = 0;
     sian_clear_images(runtime);
     sian_release_backbuffer(runtime);
     for (size_t i = 0; i < runtime->draw_count; i++) release(runtime->draws[i].label);

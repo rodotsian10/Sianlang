@@ -1,0 +1,127 @@
+|| NEON STAR RUN: collect eight stars before time runs out.
+|| The sprite is created on the first run. Conversion.sian remains an optional example.
+try
+    var sprite_file = open("player.rodot", "r")
+    sprite_file.close()
+catch error
+    rodot.create("sprite.png", "player.rodot")
+
+game.fps = 60
+game.start("title", 640, 480, "SianLang - Neon Star Run")
+
+scene title
+    draw.text("NEON STAR RUN", 190, 100, "#6de7ff")
+    draw.line(170, 138, 470, 138, "#4a79e8")
+    draw.circle(320, 205, 24, "#ffe66d")
+    draw.circle(270, 240, 9, "#ff667d")
+    draw.circle(370, 240, 9, "#ff667d")
+    draw.text("Collect 8 stars in 45 seconds", 178, 290, "#ffffff")
+    draw.text("Arrow keys: move     Red orb: danger", 151, 322, "#a9b9d6")
+    draw.text("ENTER to play     Q to quit", 185, 380, "#6de7ff")
+    if key.down("enter")
+        scene.change("play")
+    if key.down("q")
+        game.close()
+
+scene play
+    var player = rodot.load("player.rodot")
+    var ready = false
+    var score = 0
+    var lives = 3
+    var time_left = 45.0
+    var star_x = random.int(80, 560)
+    var star_y = random.int(130, 420)
+    var danger_x = 80.0
+    var danger_y = 310
+    var danger_direction = 1
+    var shield = 0.0
+    var dt = 0.0
+    var move_x = 0
+    var move_y = 0
+
+    if ready == false
+        player.x = 290
+        player.y = 380
+        player.scale = 0.35
+        player.speed = 270
+        ready = true
+
+    dt = game.delta_time()
+    time_left -= dt
+    if shield > 0
+        shield -= dt
+    move_x = 0
+    move_y = 0
+    if key.down("left")
+        move_x -= 1
+    if key.down("right")
+        move_x += 1
+    if key.down("up")
+        move_y -= 1
+    if key.down("down")
+        move_y += 1
+    player.x += move_x * player.speed * dt
+    player.y += move_y * player.speed * dt
+
+    if player.x < 0
+        player.x = 0
+    if player.x > 596
+        player.x = 596
+    if player.y < 90
+        player.y = 90
+    if player.y > 430
+        player.y = 430
+
+    danger_x += danger_direction * 190 * dt
+    if danger_x > 565
+        danger_x = 565
+        danger_direction = -1
+    if danger_x < 75
+        danger_x = 75
+        danger_direction = 1
+
+    if abs(player.x + 22 - star_x) < 29 and abs(player.y + 22 - star_y) < 29
+        score += 1
+        star_x = random.int(80, 560)
+        star_y = random.int(130, 420)
+    if shield <= 0 and abs(player.x + 22 - danger_x) < 33 and abs(player.y + 22 - danger_y) < 33
+        lives -= 1
+        shield = 1.5
+        player.x = 290
+        player.y = 380
+
+    if score >= 8
+        scene.change("win")
+    if lives <= 0 or time_left <= 0
+        scene.change("lose")
+
+    draw.line(0, 75, 640, 75, "#35548b")
+    draw.circle(star_x, star_y, 19, "#665522")
+    draw.circle(star_x, star_y, 12, "#ffe66d")
+    draw.circle(danger_x, danger_y, 27, "#552536")
+    draw.circle(danger_x, danger_y, 18, "#ff526d")
+    draw.text("STARS " + str(score) + "/8", 20, 24, "#ffe66d")
+    draw.text("LIVES " + str(lives), 230, 24, "#ff8298")
+    draw.text("TIME " + str(int(time_left)), 435, 24, "#6de7ff")
+    if shield > 0
+        draw.text("SHIELD", 515, 54, "#6de7ff")
+    if key.down("q")
+        game.close()
+
+scene win
+    draw.text("YOU WIN!", 255, 150, "#ffe66d")
+    draw.text("All eight stars are yours.", 195, 215, "#ffffff")
+    draw.text("ENTER to play again     Q to quit", 153, 335, "#6de7ff")
+    if key.down("enter")
+        scene.change("play")
+    if key.down("q")
+        game.close()
+
+scene lose
+    draw.text("GAME OVER", 245, 150, "#ff667d")
+    draw.text("Try another run!", 230, 215, "#ffffff")
+    draw.text("ENTER to retry     Q to quit", 180, 335, "#6de7ff")
+    if key.down("enter")
+        scene.change("play")
+    if key.down("q")
+        game.close()

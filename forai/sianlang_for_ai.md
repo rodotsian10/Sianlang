@@ -111,6 +111,36 @@ Fjson "save.json"
    - `delete`: 키 또는 데이터 삭제.
 4. **키워드 주의사항**: `add`, `replace`, `delete` 키워드는 파서가 특별히 처리하므로 일반 변수명/함수명으로 사용하는 것은 권장하지 않음.
 
+### 2.9 0.5.1 장면 게임과 rodot
+
+```sian
+game.fps = 60
+game.start("play", 640, 480, "My Game")
+
+scene play
+    var player = rodot.load("player.rodot")
+    var initialized = false
+    if initialized == false
+        player.x = 100
+        initialized = true
+    if key.down("right")
+        player.x += player.speed * game.delta_time()
+    if key.down("q")
+        game.close()
+```
+
+- `scene name`은 최상위에서만 정의한다. 선택된 장면 본문은 매 프레임 반복되며 다른 장면으로 이동하려면 `scene.change("name")`을 호출한다.
+- 장면 최상위의 `var` 선언은 첫 프레임에 값을 만들고 유지한다. 일반 대입은 매 프레임 반복된다. 초기 위치는 `initialized` 조건으로 한 번만 설정한다.
+- `game.fps`는 1~240 정수, `game.delta_time()`은 실제 경과 초다. `key.down`은 방향키·Enter·Space·영문 한 글자를 지원한다.
+- 모든 직접 그리기 명령은 `draw.` 접두사를 쓴다: `draw.rect`, `draw.circle`, `draw.line`, `draw.text`. 스프라이트는 자동으로 다시 그린다.
+- `rodot.create("sprite.png", "player.rodot")`은 PNG와 JSON을 묶고 기존 파일을 덮어쓰지 않는다. `rodot.load`로 불러온다.
+- `Frodot player` 블록에서 `r.data`에 `replace`, `add`, `delete`를 쓰며 정상 종료 시 `.rodot` 파일 JSON에 자동 저장한다. `player.x = 100` 같은 직접 속성 대입은 게임 중 임시 변경이다.
+- `rodot.save = true|false`는 장면 전환 시 임시 스프라이트 데이터 유지 여부다(기본 false). true이면 다음 장면에서 같은 변수명과 경로로 불러올 때 이어받는다. 파일 저장 함수 `rodot.save(player)`는 제거되었다.
+- `collision(player, enemy)`는 축 평행 충돌 사각형을 검사하며 회전은 반영하지 않는다. 게임 창·키 입력·이미지 렌더링은 현재 Windows 전용이다.
+- VS Code 확장은 `.rodot`을 이미지 미리보기와 `data` JSON 편집기로 연다. 원본 이미지·이름·크기는 편집하지 않는다.
+
+세부 인수·예제는 `설명서/0.5.1-계획.md`와 `docs/commands/`의 게임 명령별 문서를 참고한다.
+
 ---
 
 ## 3. C 인터프리터 내부 구조 (Architecture)
@@ -123,6 +153,7 @@ Fjson "save.json"
 - `src/parser.h`: AST(구문 분석 트리) 생성기 및 Fjson 키워드 파서
 - `src/calls.h`: C 내장 함수 바인딩 (math, random, file I/O 등)
 - `src/runtime.h`: 트리가이드 AST 실행기, 스코프 환경(Environment) 관리 및 런타임 평가
+- `src/rodot.h`: PNG+JSON 스프라이트 파일 읽기·쓰기
 
 ---
 
@@ -144,7 +175,7 @@ powershell -ExecutionPolicy Bypass -File build.ps1
 
 1. **코드 생성 시 주의**:
    - 콜론(`:`)이나 중괄호(`{}`)를 `if`, `while`, `def`, `try` 뒤에 넣지 말고 공백 4칸 들여쓰기를 사용한다.
-   - 주석은 `||` 또는 `#`을 지원하나 `||`가 관례이다.
+   - 주석은 `||`를 사용한다. `#`은 일반 주석 시작 기호가 아니다.
    - Fjson 구문에서는 JSON 경로 참조 시 반드시 `j.` 접두사를 붙인다.
 2. **새 기능 개발 시**:
    - C 인터프리터 수정 시 `src/lexer.h`, `src/parser.h`, `src/runtime.h` 순으로 구문을 추가한다.

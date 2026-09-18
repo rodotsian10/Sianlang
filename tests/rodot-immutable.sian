@@ -1,3 +1,4 @@
 var icon = rodot.load("build/icon.rodot")
 Frodot icon
+    replace r.data.x = 999
     replace r.meta.width = 1

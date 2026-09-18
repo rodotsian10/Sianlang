@@ -191,6 +191,15 @@ static Value rodot_load(Runtime *rt, Value *args, size_t count, Location at) {
         error_at(at, "rodot.load expects one .rodot path"); return nothing();
     }
     const char *path = args[0].as.string->text;
+    if (rt->game_active && rt->loading_rodot_name) {
+        for (size_t i = 0; i < rt->saved_rodot_count; i++) {
+            SavedRodot *saved = &rt->saved_rodots[i];
+            Value *saved_path = rodot_field(saved->sprite, "_rodot_path");
+            if (!strcmp(saved->name, rt->loading_rodot_name) && saved_path &&
+                saved_path->type == V_STR && !strcmp(saved_path->as.string->text, path))
+                return retain(saved->sprite);
+        }
+    }
     FILE *file = rodot_open(path, "rb");
     if (!file) { error_at(at, "cannot open rodot '%s'", path); return nothing(); }
     uint32_t width = 0, height = 0;
@@ -299,11 +308,11 @@ static int rodot_json_compatible(Value value, Object **parents, int depth) {
     }
     return 1;
 }
-static Value rodot_save(Runtime *rt, Value *args, size_t count, Location at) {
+static Value rodot_write_file(Runtime *rt, Value *args, size_t count, Location at) {
     (void)rt;
     if ((count != 1 && count != 2) || args[0].type != V_DICT ||
         (count == 2 && args[1].type != V_STR)) {
-        error_at(at, "rodot.save expects a loaded sprite and optional .rodot path"); return nothing();
+        error_at(at, "Frodot requires a loaded sprite"); return nothing();
     }
     Value sprite = args[0];
     Value *original_path = rodot_field(sprite, "_rodot_path");
@@ -311,7 +320,7 @@ static Value rodot_save(Runtime *rt, Value *args, size_t count, Location at) {
     Value *data = rodot_field(sprite, "data");
     if (!original_path || original_path->type != V_STR || !name || name->type != V_STR ||
         !meta || meta->type != V_DICT || !data || data->type != V_DICT) {
-        error_at(at, "rodot.save requires an intact loaded sprite"); return nothing();
+        error_at(at, "Frodot requires an intact loaded sprite"); return nothing();
     }
     Object *parents[65] = {0};
     if (!rodot_json_compatible(*name, parents, 0) || !rodot_json_compatible(*meta, parents, 0) ||

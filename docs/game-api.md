@@ -1,4 +1,4 @@
-# SianLang 0.5.0 게임 문법 (개발 중)
+# SianLang 0.5.1 게임 문법
 
 Windows에서 실행되는 장면 기반 게임 기능입니다. 장면 이름은 영문 식별자를 사용합니다. `.sian` 파일이 장면과 게임 로직을 담당하고, `.rodot` 파일은 PNG 이미지와 JSON 속성을 함께 담습니다.
 
@@ -60,9 +60,9 @@ player.visible = false
 log player.width, player.height, player.speed
 ```
 
-## `Frodot`: 실행 중 임시 변경
+## `Frodot`: `.rodot` 파일의 JSON 자동 저장
 
-`Frodot`은 메모리에 올라온 스프라이트의 `data`만 바꿉니다. 파일에는 자동으로 저장되지 않습니다. 블록 안에서는 `r.data`를 사용하고, `replace`, `add`, `delete`는 기존 Fjson과 같은 의미입니다.
+`Frodot`은 메모리에 올라온 스프라이트의 `data`를 바꾸고, 블록이 정상적으로 끝나면 `.rodot` 파일의 JSON에 자동 저장합니다. 블록 안에서는 `r.data`를 사용하고, `replace`, `add`, `delete`는 기존 Fjson과 같은 의미입니다.
 
 ```sian
 Frodot player
@@ -72,7 +72,7 @@ Frodot player
     delete r.data.user.old_item
 ```
 
-변경을 파일에 남겨야 할 때만 `rodot.save(player)` 또는 `rodot.save(player, "copy.rodot")`을 호출합니다. 저장 중에는 이미지 바이트를 보존하고 JSON 부분만 다시 씁니다.
+게임 중 직접 대입은 파일을 바꾸지 않습니다. `rodot.save = true`는 다음 장면으로 데이터를 메모리에서 이어받게 할 뿐 파일 저장은 하지 않습니다. 기본값 `false`이면 다음 장면의 재로드 때 파일값으로 돌아갑니다. 자세한 규칙은 [0.5.1 문서](../설명서/0.5.1-계획.md)를 참고하세요.
 
 ## 자동 그리기와 `draw.`
 

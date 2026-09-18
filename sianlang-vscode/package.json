@@ -2,7 +2,7 @@
   "name": "sianlang-vscode",
   "displayName": "SianLang Language Support",
   "description": "SianLang syntax, snippets, file icons and F6 execution. Includes the Windows x64 interpreter.",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "publisher": "sianlang",
   "icon": "./icon.png",
   "license": "MIT",

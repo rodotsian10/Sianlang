@@ -22,7 +22,7 @@ struct Expr {
 };
 typedef enum { S_DECLARE, S_ASSIGN, S_INDEX_ASSIGN, S_RETURN, S_EXPR, S_TRY,
     S_IF, S_WHILE, S_REPEAT, S_FOR, S_FUNCTION, S_BREAK, S_CONTINUE,
-    S_FJSON, S_FJSON_REPLACE, S_FJSON_ADD, S_FJSON_DELETE, S_SCENE, S_GAME_FPS, S_FRODOT } StatementKind;
+    S_FJSON, S_FJSON_REPLACE, S_FJSON_ADD, S_FJSON_DELETE, S_SCENE, S_GAME_FPS, S_RODOT_SAVE, S_FRODOT } StatementKind;
 typedef struct NameList { char *name; Expr *default_value; int rest; struct NameList *next; } NameList;
 typedef struct Statement Statement;
 struct Statement {
@@ -533,6 +533,11 @@ static Statement *parse_statement(Parser *p) {
                word(&p->tokens->items[p->pos + 2], "fps") && p->tokens->items[p->pos + 3].kind == T_EQUAL) {
         p->pos += 4;
         s = new_statement(p, S_GAME_FPS, token->at);
+        s->expr = parse_expression(p, 0);
+    } else if (word(token, "rodot") && p->tokens->items[p->pos + 1].kind == T_DOT &&
+               word(&p->tokens->items[p->pos + 2], "save") && p->tokens->items[p->pos + 3].kind == T_EQUAL) {
+        p->pos += 4;
+        s = new_statement(p, S_RODOT_SAVE, token->at);
         s->expr = parse_expression(p, 0);
     } else if (token->kind == T_NAME && p->tokens->items[p->pos + 1].kind == T_DOT) {
         Expr *target = parse_expression(p, 0);

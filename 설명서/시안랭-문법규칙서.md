@@ -1,12 +1,12 @@
-# SianLang 0.4.2 문법 규칙서
+# SianLang 0.5.1 문법 규칙서
 
-이 문서는 SianLang 0.4.2 구현 기준이다. 컬렉션, 인덱스 대입, 메서드, UTF-8 문자열 인덱싱, 수학/난수 내장함수, 파일 I/O, Fjson 데이터 조작 블록이 지원된다.
+이 문서는 SianLang 0.5.1 구현 기준이다. 컬렉션, 파일 I/O, Fjson과 장면·rodot·Frodot 게임 문법을 포함한다.
 
 ## 실행
 
 ```powershell
 gcc -std=c11 -Wall -Wextra -Wpedantic main.c -o Sianlang.exe
-.\Sianlang.exe code.sian
+.\Sianlang.exe examples/hello.sian
 .\Sianlang.exe --version
 ```
 
@@ -432,6 +432,34 @@ Fjson "save.json"
 - **이름 권장사항**: `add`, `replace`, `delete` 키워드는 파서가 Fjson 구문에서 특별하게 해석하므로 일반 함수나 변수 이름으로 사용하는 것은 권장하지 않습니다.
 
 처리하지 않은 오류는 파일·줄·열(바이트 기준)·원인과 호출 위치를 출력하고 종료 코드 1로 끝난다. 성공과 처리된 오류 뒤 정상 종료는 0이다.
+
+## 0.5.1 게임 장면과 스프라이트
+
+게임 창은 Windows에서 지원한다. 장면 정의는 파일의 최상위에 둔다. 같은 장면 이름을 두 번 선언하거나 장면을 블록 안에서 정의하면 문법 오류다. 장면 이름은 영문 식별자다.
+
+```text
+game.fps = 60
+game.start("play", 640, 480, "My Game")
+
+scene play
+    var player = rodot.load("player.rodot")
+    var initialized = false
+    if initialized == false
+        player.x = 100
+        initialized = true
+    if key.down("right")
+        player.x += player.speed * game.delta_time()
+    if key.down("q")
+        game.close()
+```
+
+`game.start`는 지정한 장면으로 창을 연다. 장면 본문은 매 프레임 반복되며 `scene.change("name")`을 호출해야 다른 장면으로 전환된다. 장면의 최상위 `var` 선언은 장면 진입 후 첫 실행에서만 값을 만들고 다음 프레임에는 유지한다. 일반 대입은 매 프레임 다시 실행하므로 시작 위치는 `initialized` 같은 조건으로 보호한다. `game.fps`는 1~240의 정수, 기본값은 60이다. `game.delta_time()`은 실제 경과 초를 반환한다.
+
+`key.down("key")`는 게임 창에 포커스가 있고 키가 눌려 있으면 참이다. 방향키, Enter, Space, 영문 한 글자를 지원한다. `draw.rect`, `draw.circle`, `draw.line`, `draw.text`는 현재 프레임에 도형·글자를 그린다. `.rodot` 스프라이트는 장면의 변수에 보관하면 자동으로 그려진다.
+
+`.rodot`은 PNG 바이트와 JSON(`name`, `meta`, `data`)을 함께 담는다. `rodot.create("sprite.png", "player.rodot")`으로 만들고 `rodot.load("player.rodot")`으로 불러온다. `player.x`는 `player.data.x`의 간단한 표기다. 직접 대입은 실행 중 임시 변경이다. `Frodot player` 블록에서 `r.data`에 `replace`, `add`, `delete`를 사용하면 블록 정상 종료 시 원본 `.rodot` JSON에 자동 저장한다. `rodot.save = true`는 다음 장면까지 임시 데이터를 유지하며 기본값 `false`는 재로드 때 파일값을 사용한다. `name`과 `meta`는 읽기 전용이다. `collision(player, enemy)`는 두 스프라이트의 축 평행 충돌 사각형을 검사하고 이미지 회전은 반영하지 않는다.
+
+명령별 인수와 예제는 [게임 명령어 사전](../docs/commands/index.md), [0.5.1 저장 규칙](0.5.1-계획.md)을 참고한다.
 
 한도는 조용한 잘림 대신 오류로 보고한다.
 

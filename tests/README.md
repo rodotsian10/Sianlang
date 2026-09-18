@@ -20,7 +20,7 @@ node tests/test_extension.js
 
 ## 실행기
 
-- 원래 53개 재현 입력은 `review/cases`에 있으며 이전 실행 결과를 덮어쓰지 않습니다.
+- 원래 53개 재현 입력은 `history/review/cases`에 있으며 이전 실행 결과를 덮어쓰지 않습니다.
 - 현재 기대 출력·오류·종료 코드는 `test_runtime.py`에서 검증합니다.
 - 기존 예제, 공식 문서의 모든 sian 코드 블록, 함수 범위·재귀·반복·오류 흐름을 검증합니다.
 - 숫자 경계와 800개 산술 결과를 Python 정수 계산과 비교합니다.
@@ -45,15 +45,15 @@ python tests\test_v03.py --exe build\Sianlang-asan.exe
 ```
 
 `build` 폴더는 기본 빌드에서 생성됩니다. ASan은 모든 종류의 버그나 누수 부재를 보증하지 않습니다.
-# 배포판 검증 (0.3.1)
+# 배포판 검증 (0.5.1)
 
-`build.ps1`은 실행기 241회, 확장 모의 시나리오 14개, ZIP/VSIX/체크섬/독립 실행 검증을 수행합니다.
+`build.ps1`은 실행기·게임·확장 모의 테스트와 ZIP/VSIX/체크섬/독립 실행 검증을 수행합니다.
 `python tests/test_release.py`는 한글·공백·셸 기호가 있는 임시 경로에 ZIP을 풀고 개발 도구 없는 PATH로 실행합니다.
 
 실제 VS Code 확장 환경 테스트는 별도 프로필에 설치한 후 실행합니다. 기존 사용자 확장과 설정은 변경하지 않습니다.
 
 ```powershell
-code --user-data-dir build/vscode-release-profile --extensions-dir build/vscode-release-extensions --install-extension dist/0.3.1/sianlang-vscode-0.3.1.vsix --force
+code --user-data-dir build/vscode-release-profile --extensions-dir build/vscode-release-extensions --install-extension dist/0.5.1/sianlang-vscode-0.5.1.vsix --force
 powershell -ExecutionPolicy Bypass -File tests/test_extension_host.ps1
 ```
 

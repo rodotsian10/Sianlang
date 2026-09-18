@@ -27,6 +27,7 @@ struct Dict { Object object; size_t count, capacity; DictEntry *items; };
 typedef enum { FLOW_NORMAL, FLOW_RETURN, FLOW_BREAK, FLOW_CONTINUE, FLOW_ERROR } FlowKind;
 typedef struct { FlowKind kind; Value value; } Flow;
 typedef struct { int kind, x, y, a, b; uint32_t color; Value label; } DrawCommand;
+typedef struct { const char *name; Value sprite; } SavedRodot;
 #ifdef _WIN32
 typedef struct { Value sprite; GpBitmap *bitmap; IStream *stream; } SpriteBitmap;
 #endif
@@ -35,7 +36,10 @@ typedef struct {
     Env *global;
     Env *scene_env;
     const char *next_scene;
-    int fps, game_active, game_exit, frodot_active;
+    int fps, game_active, game_exit, frodot_active, rodot_save_enabled;
+    const char *loading_rodot_name;
+    SavedRodot *saved_rodots;
+    size_t saved_rodot_count, saved_rodot_capacity;
     double delta_time;
     DrawCommand *draws;
     size_t draw_count, draw_capacity;

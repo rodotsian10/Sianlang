@@ -5,9 +5,8 @@ scene play
     var icon = rodot.load("build/icon.rodot")
     var frames = 0
     frames += 1
-    Frodot icon
-        replace r.data.x += 5
-        replace r.data.y = 20
+    icon.x += 5
+    icon.y = 20
     draw.rect(200, 30, 80, 60, "#ff5555")
     draw.circle(350, 60, 25, "#55ff55")
     draw.line(400, 20, 500, 100)

@@ -1,4 +1,4 @@
-# SianLang Language Support 0.5.0
+# SianLang Language Support 0.5.1
 
 Syntax highlighting, indentation, file icons, and interactive execution for `.sian` files.
 
@@ -6,7 +6,7 @@ Syntax highlighting, indentation, file icons, and interactive execution for `.si
 
 ## Run a file
 
-1. Download `sianlang-vscode-0.5.0.vsix`. It includes the Windows x64 interpreter; no compiler, Python, or Node.js installation is required.
+1. Download `sianlang-vscode-0.5.1.vsix`. It includes the Windows x64 interpreter; no compiler, Python, or Node.js installation is required.
 2. Install it using VS Code **Extensions: Install from VSIX...**.
 3. Open a saved local `.sian` file in a trusted workspace. Standalone files also work.
 4. Press the ▶ run button in the editor title bar. F6 and **SianLang: Run File** do the same thing.

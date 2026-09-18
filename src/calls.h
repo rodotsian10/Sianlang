@@ -18,7 +18,7 @@ static Value builtin_value(Runtime *rt, const char *name) {
     static const char *names[] = {"log", "log.f", "input", "len", "range", "time.now",
         "int", "float", "str", "bool", "TF",
         "abs", "min", "max", "round",
-        "random.int", "random.float", "random.choice", "open", "game.start", "game.close", "game.delta_time", "scene.change", "key.down", "rodot.create", "rodot.load", "rodot.save", "draw.rect", "draw.circle", "draw.line", "draw.text", "collision"};
+        "random.int", "random.float", "random.choice", "open", "game.start", "game.close", "game.delta_time", "scene.change", "key.down", "rodot.create", "rodot.load", "draw.rect", "draw.circle", "draw.line", "draw.text", "collision"};
     Closure *fn = new_object(rt, sizeof(*fn), G_FUNCTION);
     for (size_t i = 0; i < sizeof(names) / sizeof(*names); i++) if (!strcmp(name, names[i])) { fn->builtin = names[i]; break; }
     Value result = {.type = V_FUNCTION}; result.as.function = fn; return result;
@@ -312,7 +312,6 @@ static Value call_builtin(Runtime *rt, const char *name, Arguments *args, Locati
     if (!strcmp(name, "input")) return input_value(args->values, args->count, at);
     if (!strcmp(name, "rodot.create")) return rodot_create(args->values, args->count, at);
     if (!strcmp(name, "rodot.load")) return rodot_load(rt, args->values, args->count, at);
-    if (!strcmp(name, "rodot.save")) return rodot_save(rt, args->values, args->count, at);
     if (!strcmp(name, "collision")) {
         if (args->count != 2 || !rodot_field(args->values[0], "_rodot_path") ||
             !rodot_field(args->values[1], "_rodot_path")) {

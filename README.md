@@ -2,12 +2,12 @@
 
 # SianLang
 
-개발 중인 0.5.0 게임 기능: [장면·스프라이트 문법 안내](docs/game-api.md). 공개 다운로드는 안정 버전 릴리스를 확인하세요.
+0.5.1 게임 문법: [장면·스프라이트 안내](docs/game-api.md). ZIP의 `sianlanggameex1`에서 PNG 변환과 게임 실행을 체험할 수 있습니다.
 
 **간단한 문법으로 시작하는 프로그래밍 언어.**
 
-Python처럼 쉽게 배우고, 앞으로 2D 게임을 만들 수 있는 언어를 목표로 개발하고 있습니다.
-현재 개발 버전은 **0.4.2**이며, Fjson 데이터 조작 블록(`Fjson`, `replace`, `add`, `delete`), 컬렉션 인덱스 대입, list/dict 메서드, UTF-8 문자열 인덱싱, 수학/난수 내장함수, 파일 I/O를 탑재했습니다.
+Python처럼 쉽게 배우고 2D 게임을 만드는 언어를 목표로 개발하고 있습니다.
+현재 버전은 **0.5.1**이며, 장면·게임 창·실시간 키 입력·rodot 스프라이트·Frodot을 지원합니다. 기존 Fjson, 컬렉션, 수학/난수, 파일 I/O 기능도 사용할 수 있습니다.
 
 [다운로드 웹사이트](https://rodotsian10.github.io/Sianlang/) · [릴리스 다운로드](https://github.com/rodotsian10/Sianlang/releases) · [문법 안내서](설명서/시안랭-문법규칙서.md)
 
@@ -30,15 +30,16 @@ Fjson "save.json"
     add j.inventory = "전설의 검"
 ```
 
-ZIP에는 실행기, VS Code 확장, 실행 예제, 문법 문서가 포함됩니다.
+ZIP에는 실행기, VS Code 확장, `sianlanggameex1` 변환·게임 예제와 문법 문서가 포함됩니다.
 콘솔에서는 `Sianlang.exe 프로그램.sian`으로 실행합니다. [자세한 설치 안내](배포/시작하기.md)
 
-숫자 맞히기 게임은 `examples/guessing-game.sian`, JSON 세이브 조작 예제는 `examples/fjson-demo.sian`에서 확인할 수 있습니다.
+아케이드 게임은 `sianlanggameex1/game.sian`을 바로 실행합니다. 첫 실행에 스프라이트가 자동 생성되며 `Conversion.sian`으로 변환 과정을 따로 체험할 수도 있습니다. 숫자 맞히기는 `examples/guessing-game.sian`, JSON 세이브 예제는 `examples/fjson-demo.sian`입니다.
 
 ## VS Code 지원
 
 - 문법 강조, 괄호 자동 닫기, 들여쓰기, 기본 문법 스니펫
 - 실행기가 포함된 확장으로 F6 실행 및 터미널 입력
+- `.rodot` 이미지 미리보기와 `data` JSON 편집·저장
 - 제작자의 SVG를 사용하는 `.sian` 파일 아이콘
 
 아이콘을 적용하려면 **Preferences: File Icon Theme → SianLang File Icons**를 선택하세요.
@@ -54,7 +55,7 @@ ZIP에는 실행기, VS Code 확장, 실행 예제, 문법 문서가 포함됩�
 **수학 내장함수(`abs`, `min`, `max`, `round`)**, **난수 내장함수(`random.int`, `random.float`, `random.choice`)**, **파일 I/O(`open`, `read`, `write`, `close`)**를 지원합니다.
 범위는 들여쓰기로 구분합니다.
 
-게임 창·실시간 키 입력·객체 기능은 [게임 기능 계획](게임기능-계획.md)에 정리했습니다.
+장면과 rodot 문법은 [게임 API](docs/game-api.md)와 [게임 명령어 사전](docs/commands/index.md)에 정리했습니다.
 현재 모든 Python 문법을 호환하는 언어는 아닙니다. Python 기능은 안정적인 SianLang 문법으로 단계적으로 추가합니다.
 
 ## 소스에서 빌드하기
@@ -65,8 +66,8 @@ ZIP에는 실행기, VS Code 확장, 실행 예제, 문법 문서가 포함됩�
 powershell -ExecutionPolicy Bypass -File .\build.ps1
 ```
 
-경고를 오류로 검사하고 실행기·확장·배포 테스트를 실행한 뒤 `dist/0.4.0/`에 배포 파일을 만듭니다.
-실행기만 빌드하려면 `gcc main.c -o Sianlang.exe`를 사용할 수 있습니다.
+경고를 오류로 검사하고 실행기·확장·배포 테스트를 실행한 뒤 `dist/0.5.1/`에 배포 파일을 만듭니다.
+Windows에서 실행기만 빌드하려면 `gcc main.c -o Sianlang.exe -lgdi32 -lgdiplus -lshlwapi`를 사용합니다.
 
 [테스트 안내](tests/README.md) · [변경 기록](CHANGELOG.md) · [배포 절차](배포/배포하기.md)
 

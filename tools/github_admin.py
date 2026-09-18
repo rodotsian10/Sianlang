@@ -68,7 +68,8 @@ elif mode == 'pages':
     request('PATCH', '', {'description': '쉽게 배우는 프로그래밍 언어 · Windows 실행기와 VS Code 확장 · 2D 게임 제작을 목표로 개발 중', 'homepage': 'https://rodotsian10.github.io/Sianlang/'})
     print(json.dumps({key: page.get(key) for key in ['html_url', 'status', 'source']}, indent=2))
 elif mode == 'verify':
-    for endpoint in ['/pages', '/pages/builds/latest', '/actions/runs?per_page=3', '/releases/tags/v0.3.1']:
+    version = json.loads((ROOT / 'sianlang-vscode/package.json').read_text(encoding='utf-8'))['version']
+    for endpoint in ['/pages', '/pages/builds/latest', '/actions/runs?per_page=3', f'/releases/tags/v{version}']:
         try:
             result = request('GET', endpoint)
             if 'workflow_runs' in result:

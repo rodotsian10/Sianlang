@@ -28,6 +28,10 @@ files = {
     'examples/collections-demo.sian': ROOT / 'examples/collections-demo.sian',
     'examples/file-io-demo.sian': ROOT / 'examples/file-io-demo.sian',
     'examples/fjson-demo.sian': ROOT / 'examples/fjson-demo.sian',
+    'sianlanggameex1/README.md': ROOT / 'sianlanggameex1/README.md',
+    'sianlanggameex1/Conversion.sian': ROOT / 'sianlanggameex1/Conversion.sian',
+    'sianlanggameex1/game.sian': ROOT / 'sianlanggameex1/game.sian',
+    'sianlanggameex1/sprite.png': ROOT / 'sianlanggameex1/sprite.png',
     vsix_name: out / vsix_name,
 }
 zip_name = f'SianLang-{version}-windows-x64.zip'

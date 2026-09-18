@@ -80,8 +80,8 @@ async function scenario(options = {}) {
     if (options.noFolder) assert.equal(result.tasks[0].scope, 1);
     count++;
   }
-  const nested = await scenario({ file: path.join(good.root, 'sianlang1stgame', 'game.sian') });
-  assert.equal(nested.tasks[0].execution.options.cwd, path.join(good.root, 'sianlang1stgame'));
+  const nested = await scenario({ file: path.join(good.root, 'sianlanggameex1', 'game.sian') });
+  assert.equal(nested.tasks[0].execution.options.cwd, path.join(good.root, 'sianlanggameex1'));
   count++;
   console.log(`${count} extension scenarios passed`);
 })().catch(error => { console.error(error); process.exitCode = 1; });

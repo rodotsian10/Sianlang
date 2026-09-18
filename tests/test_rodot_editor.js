@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { parseRodot, serializeRodot, registerRodotEditor } = require('../sianlang-vscode/rodot-editor');
 
-const original = fs.readFileSync(path.join(__dirname, '..', 'sianlang1stgame', 'player.rodot'));
+const original = fs.readFileSync(path.join(__dirname, '..', 'history', 'sianlang1stgame', 'player.rodot'));
 const parsed = parseRodot(original);
 assert.equal(parsed.metadata.name, 'player');
 assert.equal(parsed.width, 128);

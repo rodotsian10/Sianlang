@@ -1,0 +1,3 @@
+|| Optional: run once before game.sian to see PNG -> rodot conversion.
+rodot.create("sprite.png", "player.rodot")
+log "player.rodot created"
